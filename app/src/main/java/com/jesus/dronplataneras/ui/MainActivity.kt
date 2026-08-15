@@ -10,6 +10,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import com.jesus.dronplataneras.sdk.AppStatus
 import com.jesus.dronplataneras.sdk.DJIConnectionManager
@@ -51,7 +55,12 @@ class MainActivity : AppCompatActivity() {
         setContent {
             MaterialTheme {
                 Surface {
-                    MainScreen()
+                    var showGallery by remember { mutableStateOf(false) }
+                    if (showGallery) {
+                        GalleryScreen(onBack = { showGallery = false })
+                    } else {
+                        MainScreen(onOpenGallery = { showGallery = true })
+                    }
                 }
             }
         }
