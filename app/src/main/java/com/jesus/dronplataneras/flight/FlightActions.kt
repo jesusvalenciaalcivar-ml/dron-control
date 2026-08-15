@@ -1,24 +1,13 @@
 package com.jesus.dronplataneras.flight
 
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
+import com.jesus.dronplataneras.sdk.readable
+import com.jesus.dronplataneras.sdk.runOnMain
 import dji.sdk.keyvalue.key.FlightControllerKey
-import dji.v5.common.error.IDJIError
 import dji.v5.et.action
 import dji.v5.et.create
 
 object FlightActions {
-
-    private val mainHandler = Handler(Looper.getMainLooper())
-
-    private fun runOnMain(action: () -> Unit) {
-        mainHandler.post(action)
-    }
-
-    private fun IDJIError.readable(): String =
-        listOfNotNull(description(), hint(), errorCode()).firstOrNull { it.isNotBlank() }
-            ?: "error desconocido"
 
     fun takeOffToTargetHeight(onStatus: (String) -> Unit, onResult: (Boolean) -> Unit = {}) {
         Log.d("MyApp", "takeOffToTargetHeight() llamada")
