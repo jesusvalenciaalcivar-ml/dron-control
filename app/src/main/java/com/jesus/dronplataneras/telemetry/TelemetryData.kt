@@ -10,5 +10,6 @@ data class TelemetryData(
     val gpsSignalLevel: String = "",
     val homeLocationSet: Boolean = false,
     val goHomeStatus: String = "IDLE",
-    val flightMode: String = ""
+    val flightMode: String = "",
+    val signalQuality: Int = 0
 )

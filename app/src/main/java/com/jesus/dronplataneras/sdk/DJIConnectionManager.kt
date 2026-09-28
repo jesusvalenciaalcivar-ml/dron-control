@@ -82,6 +82,7 @@ object DJIConnectionManager {
         }
     }
 
+    // Funcion para volver a casa - de manera especifica
     fun checkGoHomeKeySupport(onResult: (String) -> Unit) {
         val support = listOf(
             "StartGoHome" to KeyTools.createKey(FlightControllerKey.KeyStartGoHome).isKeySupported(),

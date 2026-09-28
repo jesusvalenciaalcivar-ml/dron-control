@@ -23,6 +23,8 @@ import dji.v5.common.register.DJISDKInitEvent
 import dji.v5.manager.SDKManager
 import dji.v5.manager.interfaces.SDKManagerCallback
 
+private enum class Screen { HOME, FLIGHT, GALLERY }
+
 class MainActivity : AppCompatActivity() {
 
     private val requiredPermissions: Array<String> by lazy {
@@ -55,11 +57,11 @@ class MainActivity : AppCompatActivity() {
         setContent {
             MaterialTheme {
                 Surface {
-                    var showGallery by remember { mutableStateOf(false) }
-                    if (showGallery) {
-                        GalleryScreen(onBack = { showGallery = false })
-                    } else {
-                        MainScreen(onOpenGallery = { showGallery = true })
+                    var screen by remember { mutableStateOf(Screen.HOME) }
+                    when (screen) {
+                        Screen.HOME -> HomeScreen(onEnterFlightScreen = { screen = Screen.FLIGHT })
+                        Screen.FLIGHT -> MainScreen(onOpenGallery = { screen = Screen.GALLERY })
+                        Screen.GALLERY -> GalleryScreen(onBack = { screen = Screen.FLIGHT })
                     }
                 }
             }

@@ -3,6 +3,7 @@ package com.jesus.dronplataneras.telemetry
 import androidx.compose.runtime.mutableStateOf
 import com.jesus.dronplataneras.flight.FlightActions
 import com.jesus.dronplataneras.sdk.AppStatus
+import dji.sdk.keyvalue.key.AirLinkKey
 import dji.sdk.keyvalue.key.BatteryKey
 import dji.sdk.keyvalue.key.FlightControllerKey
 import dji.sdk.keyvalue.key.KeyTools
@@ -72,6 +73,12 @@ object TelemetryManager {
             KeyTools.createKey(FlightControllerKey.KeyFlightMode), this
         ) { _, newValue ->
             telemetry.value = telemetry.value.copy(flightMode = newValue?.toString() ?: "")
+        }
+
+        KeyManager.getInstance().listen(
+            KeyTools.createKey(AirLinkKey.KeySignalQuality), this
+        ) { _, newValue ->
+            telemetry.value = telemetry.value.copy(signalQuality = newValue ?: 0)
         }
     }
 
