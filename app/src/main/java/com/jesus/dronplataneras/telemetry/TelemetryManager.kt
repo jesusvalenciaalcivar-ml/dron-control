@@ -76,6 +76,14 @@ object TelemetryManager {
         }
 
         KeyManager.getInstance().listen(
+            KeyTools.createKey(FlightControllerKey.KeyHomeLocation), this
+        ) { _, newValue ->
+            newValue?.let {
+                telemetry.value = telemetry.value.copy(homeLatitude = it.latitude, homeLongitude = it.longitude)
+            }
+        }
+
+        KeyManager.getInstance().listen(
             KeyTools.createKey(AirLinkKey.KeySignalQuality), this
         ) { _, newValue ->
             telemetry.value = telemetry.value.copy(signalQuality = newValue ?: 0)

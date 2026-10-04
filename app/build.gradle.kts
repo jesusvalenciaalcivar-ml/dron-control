@@ -30,6 +30,8 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["djiApiKey"] = djiApiKey
+        // El SDK de DJI v5 solo funciona en arm64-v8a; las demás ABIs solo inflan el APK
+        ndk { abiFilters += "arm64-v8a" }
     }
 
     buildTypes {

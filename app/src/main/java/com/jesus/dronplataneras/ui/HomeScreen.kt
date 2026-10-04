@@ -21,17 +21,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.jesus.dronplataneras.sdk.AppStatus
 import com.jesus.dronplataneras.sdk.DJIConnectionManager
 import com.jesus.dronplataneras.telemetry.TelemetryManager
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
-private val AgroGreen = Color(0xFF1E8E5A)
-private val DangerRed = Color(0xFFD9484A)
-private val DangerBg = Color(0xFFFBEAEA)
-private val CardBg = Color(0xFFF4F5F4)
 
 private data class SampleMission(val name: String, val date: String, val hectares: String, val color: Color)
 
@@ -42,28 +36,12 @@ private val sampleMissions = listOf(
 )
 
 @Composable
-fun HomeScreen(onEnterFlightScreen: () -> Unit) {
+fun HomeScreen(onEnterFlightScreen: () -> Unit, onConnect: () -> Unit) {
     val isConnected by DJIConnectionManager.isConnected
     val telemetry by TelemetryManager.telemetry
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Barra superior
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color.White)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Wifi, contentDescription = null, tint = AgroGreen, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("AgroScan", style = MaterialTheme.typography.titleMedium, color = AgroGreen, fontWeight = FontWeight.Bold)
-            }
-            StatusPill(isConnected)
-        }
-        HorizontalDivider()
+        AppTopBar("AgroScan") { StatusPill(isConnected) }
 
         // Sin scroll: todo se reparte con weight() para caber en cualquier alto de pantalla
         Column(
@@ -72,7 +50,7 @@ fun HomeScreen(onEnterFlightScreen: () -> Unit) {
                 .padding(12.dp)
         ) {
             if (!isConnected) {
-                DisconnectedBanner()
+                DisconnectedBanner(onConnect)
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
@@ -122,7 +100,7 @@ fun HomeScreen(onEnterFlightScreen: () -> Unit) {
                     title = "Nueva Misión",
                     subtitle = "Configurar parámetros de vuelo automatizado.",
                     icon = Icons.Filled.FlightTakeoff,
-                    background = if (isConnected) AgroGreen else Color(0xFFB9C2BC),
+                    background = if (isConnected) Color(0xFF00704A) else Color(0xFFB9C2BC),
                     contentColor = Color.White,
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                     onClick = if (isConnected) onEnterFlightScreen else null
@@ -162,23 +140,7 @@ fun HomeScreen(onEnterFlightScreen: () -> Unit) {
 }
 
 @Composable
-private fun StatusPill(isConnected: Boolean) {
-    val (bg, text) = if (isConnected) AgroGreen to "ESTADO: LISTO" else DangerRed to "ESTADO: DESCONECTADO"
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(bg.copy(alpha = 0.12f))
-            .padding(horizontal = 10.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(bg))
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(text, color = bg, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-    }
-}
-
-@Composable
-private fun DisconnectedBanner() {
+private fun DisconnectedBanner(onConnect: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -201,7 +163,7 @@ private fun DisconnectedBanner() {
                 )
             }
         }
-        OutlinedButton(onClick = { AppStatus.message.value = "Verifica que el dron y el control estén encendidos" }, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)) {
+        OutlinedButton(onClick = onConnect, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)) {
             Icon(Icons.Filled.Link, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(6.dp))
             Text("Conectar Dron", style = MaterialTheme.typography.bodySmall)

@@ -15,6 +15,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.jesus.dronplataneras.sdk.AppStatus
 import com.jesus.dronplataneras.sdk.DJIConnectionManager
 import com.jesus.dronplataneras.telemetry.TelemetryManager
@@ -23,7 +26,7 @@ import dji.v5.common.register.DJISDKInitEvent
 import dji.v5.manager.SDKManager
 import dji.v5.manager.interfaces.SDKManagerCallback
 
-private enum class Screen { HOME, FLIGHT, GALLERY }
+private enum class Screen { HOME, CONNECT, NOT_DETECTED, FLIGHT }
 
 class MainActivity : AppCompatActivity() {
 
@@ -59,14 +62,36 @@ class MainActivity : AppCompatActivity() {
                 Surface {
                     var screen by remember { mutableStateOf(Screen.HOME) }
                     when (screen) {
-                        Screen.HOME -> HomeScreen(onEnterFlightScreen = { screen = Screen.FLIGHT })
-                        Screen.FLIGHT -> MainScreen(onOpenGallery = { screen = Screen.GALLERY })
-                        Screen.GALLERY -> GalleryScreen(onBack = { screen = Screen.FLIGHT })
+                        Screen.HOME -> HomeScreen(
+                            onEnterFlightScreen = { screen = Screen.FLIGHT },
+                            onConnect = { screen = Screen.CONNECT }
+                        )
+                        Screen.CONNECT -> ConnectScreen(
+                            onConnected = { screen = Screen.HOME },
+                            onNotDetected = { screen = Screen.NOT_DETECTED }
+                        )
+                        Screen.NOT_DETECTED -> NotDetectedScreen(
+                            onRetry = { screen = Screen.CONNECT },
+                            onHome = { screen = Screen.HOME }
+                        )
+                        Screen.FLIGHT -> MainScreen(onBack = { screen = Screen.HOME })
                     }
                 }
             }
         }
         registerApp()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemBars()
+    }
+
+    private fun hideSystemBars() {
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.systemBars())
+        }
     }
 
     private fun requestNeededPermissions() {

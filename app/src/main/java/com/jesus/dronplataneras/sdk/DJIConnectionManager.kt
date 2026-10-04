@@ -6,7 +6,6 @@ import dji.sdk.keyvalue.key.KeyTools
 import dji.sdk.keyvalue.value.flightcontroller.GoHomeNeedConfirmType
 import dji.v5.et.action
 import dji.v5.et.create
-import dji.v5.et.isKeySupported
 import dji.v5.manager.KeyManager
 import dji.v5.manager.diagnostic.DeviceHealthManager
 import dji.v5.manager.diagnostic.WarningLevel
@@ -83,13 +82,4 @@ object DJIConnectionManager {
     }
 
     // Funcion para volver a casa - de manera especifica
-    fun checkGoHomeKeySupport(onResult: (String) -> Unit) {
-        val support = listOf(
-            "StartGoHome" to KeyTools.createKey(FlightControllerKey.KeyStartGoHome).isKeySupported(),
-            "GoHomeStatus" to KeyTools.createKey(FlightControllerKey.KeyGoHomeStatus).isKeySupported(),
-            "GoHomeInfo" to KeyTools.createKey(FlightControllerKey.KeyGoHomeInfo).isKeySupported(),
-            "GoHomeConfirm" to KeyTools.createKey(FlightControllerKey.KeyGoHomeConfirm).isKeySupported()
-        )
-        onResult(support.joinToString(", ") { (name, supported) -> "$name=$supported" })
-    }
 }
