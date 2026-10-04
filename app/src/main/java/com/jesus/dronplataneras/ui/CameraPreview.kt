@@ -16,11 +16,13 @@ fun CameraPreview(modifier: Modifier = Modifier) {
         modifier = modifier,
         factory = { context ->
             TextureView(context).apply {
+                var registered: Surface? = null
                 surfaceTextureListener = object : TextureView.SurfaceTextureListener {
                     override fun onSurfaceTextureAvailable(
                         texture: SurfaceTexture, width: Int, height: Int
                     ) {
                         val surface = Surface(texture)
+                        registered = surface
                         MediaDataCenter.getInstance().cameraStreamManager.putCameraStreamSurface(
                             ComponentIndexType.LEFT_OR_MAIN,
                             surface,
@@ -35,8 +37,11 @@ fun CameraPreview(modifier: Modifier = Modifier) {
                     ) {}
 
                     override fun onSurfaceTextureDestroyed(texture: SurfaceTexture): Boolean {
-                        MediaDataCenter.getInstance().cameraStreamManager
-                            .removeCameraStreamSurface(Surface(texture))
+                        registered?.let {
+                            MediaDataCenter.getInstance().cameraStreamManager.removeCameraStreamSurface(it)
+                            it.release()
+                        }
+                        registered = null
                         return true
                     }
 

@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.FlightTakeoff
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.SettingsInputAntenna
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.*
@@ -36,12 +37,25 @@ private val sampleMissions = listOf(
 )
 
 @Composable
-fun HomeScreen(onEnterFlightScreen: () -> Unit, onConnect: () -> Unit) {
+fun HomeScreen(onEnterFlightScreen: () -> Unit, onConnect: () -> Unit, onOpenNtrip: () -> Unit) {
     val isConnected by DJIConnectionManager.isConnected
     val telemetry by TelemetryManager.telemetry
 
     Column(modifier = Modifier.fillMaxSize()) {
-        AppTopBar("AgroScan") { StatusPill(isConnected) }
+        AppTopBar(
+            title = "AgroScan",
+            center = {
+                OutlinedButton(
+                    onClick = onOpenNtrip,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Icon(Icons.Filled.SettingsInputAntenna, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Estación NTRIP", style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        ) { StatusPill(isConnected) }
 
         // Sin scroll: todo se reparte con weight() para caber en cualquier alto de pantalla
         Column(

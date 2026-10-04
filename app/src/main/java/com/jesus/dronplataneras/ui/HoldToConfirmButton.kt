@@ -28,6 +28,8 @@ fun HoldToConfirmButton(
     size: Dp,
     enabled: Boolean = true,
     holdDurationMillis: Int = 1200,
+    ringColor: Color = color,
+    icon: (@Composable () -> Unit)? = null,
     onConfirm: () -> Unit
 ) {
     var progress by remember { mutableStateOf(0f) }
@@ -42,7 +44,7 @@ fun HoldToConfirmButton(
             CircularProgressIndicator(
                 progress = { progress },
                 modifier = Modifier.size(size + 10.dp),
-                color = color,
+                color = ringColor,
                 strokeWidth = 4.dp
             )
         }
@@ -77,7 +79,7 @@ fun HoldToConfirmButton(
                 }
         ) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                Text(
+                if (icon != null) icon() else Text(
                     text,
                     style = MaterialTheme.typography.labelSmall,
                     textAlign = TextAlign.Center,

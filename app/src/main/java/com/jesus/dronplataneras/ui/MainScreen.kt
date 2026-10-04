@@ -1,8 +1,8 @@
 package com.jesus.dronplataneras.ui
 
 import android.location.Location
-import android.widget.Toast
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -23,18 +23,24 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.jesus.dronplataneras.R
+import com.jesus.dronplataneras.flight.FlightActions
 import com.jesus.dronplataneras.sdk.AppStatus
+import com.jesus.dronplataneras.sdk.DJIConnectionManager
 import com.jesus.dronplataneras.telemetry.TelemetryManager
+import kotlinx.coroutines.delay
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
@@ -49,18 +55,23 @@ private typealias LatLon = Pair<Double, Double>
 
 @Composable
 fun MainScreen(onBack: () -> Unit) {
+    val isConnected by DJIConnectionManager.isConnected
+    val isFlying by DJIConnectionManager.isFlying
     val statusMessage by AppStatus.message
     val telemetry by TelemetryManager.telemetry
-    val context = LocalContext.current
     val vertices = remember { mutableStateListOf<LatLon>() }
 
     LaunchedEffect(statusMessage) {
         if (statusMessage.isNotEmpty()) {
-            Toast.makeText(context, statusMessage, Toast.LENGTH_LONG).show()
+            delay(5000)
+            AppStatus.message.value = ""
         }
     }
 
-    val distance = if (telemetry.homeLocationSet) {
+    val hasPosition = !telemetry.latitude.isNaN() && !telemetry.longitude.isNaN() &&
+        (telemetry.latitude != 0.0 || telemetry.longitude != 0.0)
+
+    val distance = if (telemetry.homeLocationSet && hasPosition) {
         FloatArray(1).also {
             Location.distanceBetween(
                 telemetry.latitude, telemetry.longitude,
@@ -69,54 +80,82 @@ fun MainScreen(onBack: () -> Unit) {
         }[0]
     } else 0f
 
-    val hasPosition = telemetry.latitude != 0.0 || telemetry.longitude != 0.0
-
     BoxWithConstraints(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         val mapWidth = min(150f, maxWidth.value * 0.26f).dp
         val mapHeight = min(90f, maxHeight.value * 0.26f).dp
 
         CameraPreview(modifier = Modifier.fillMaxSize())
 
-        // HUD superior
+        // Fila superior: datos | notificación (centro) | volver
         Row(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(10.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(HudBarBackground)
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.align(Alignment.TopStart).fillMaxWidth().padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.Top
         ) {
-            HudStat(Icons.Filled.Satellite, "SATÉLITES", "${telemetry.gpsSatelliteCount}")
-            HudStat(Icons.Filled.Height, "ALTITUD", "%.0f m".format(telemetry.altitude))
-            HudStat(Icons.Filled.Straighten, "DISTANCIA", "%.0f m".format(distance))
-            HudStat(Icons.Filled.Speed, "VELOCIDAD", "%.1f m/s".format(telemetry.speed))
-            HudStat(Icons.Filled.Battery5Bar, "BATERÍA", "${telemetry.batteryPercent}%")
-        }
-
-        if (statusMessage.isNotEmpty()) {
-            Text(
-                text = statusMessage,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White,
-                textAlign = TextAlign.Center,
+            Row(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(12.dp)
-                    .background(HudBackground, RoundedCornerShape(8.dp))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            )
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(HudBarBackground)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                HudStat(Icons.Filled.Satellite, "SATÉLITES", "${telemetry.gpsSatelliteCount}")
+                HudStat(Icons.Filled.Height, "ALTITUD", "%.0f m".format(telemetry.altitude))
+                HudStat(Icons.Filled.Straighten, "DISTANCIA", "%.0f m".format(distance))
+                HudStat(Icons.Filled.Speed, "VELOCIDAD", "%.1f m/s".format(telemetry.speed))
+                HudStat(Icons.Filled.Battery5Bar, "BATERÍA", "${telemetry.batteryPercent}%")
+            }
+
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
+                if (statusMessage.isNotEmpty()) {
+                    Text(
+                        text = statusMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        maxLines = 3,
+                        modifier = Modifier
+                            .background(HudBackground, RoundedCornerShape(8.dp))
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
+                }
+            }
+
+            Button(
+                onClick = onBack,
+                shape = CircleShape,
+                contentPadding = PaddingValues(0.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xCC37474F)),
+                modifier = Modifier.size(38.dp)
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver", modifier = Modifier.size(20.dp))
+            }
         }
 
-        // Izquierda: volver
-        Button(
-            onClick = onBack,
-            shape = CircleShape,
-            contentPadding = PaddingValues(0.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xCC37474F)),
-            modifier = Modifier.align(Alignment.CenterStart).padding(start = 12.dp).size(44.dp)
-        ) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver", modifier = Modifier.size(22.dp))
+        // Izquierda: despegar (en tierra) / aterrizar (volando), manteniendo presionado
+        Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 10.dp)) {
+            HoldToConfirmButton(
+                text = if (isFlying) "Aterrizar" else "Despegar",
+                color = Color(0xE6FFFFFF),
+                ringColor = if (isFlying) DangerRed else AgroGreen,
+                size = 64.dp,
+                enabled = isConnected,
+                icon = {
+                    Image(
+                        painter = painterResource(R.drawable.ic_land_arrow),
+                        contentDescription = if (isFlying) "Aterrizar" else "Despegar",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize().rotate(if (isFlying) 0f else 180f)
+                    )
+                },
+                onConfirm = {
+                    if (isFlying) {
+                        FlightActions.landNow(onStatus = { status -> AppStatus.message.value = status })
+                    } else {
+                        FlightActions.takeOffToTargetHeight(onStatus = { status -> AppStatus.message.value = status })
+                    }
+                }
+            )
         }
 
         // Mini mapa (abajo izquierda)
@@ -150,7 +189,7 @@ fun MainScreen(onBack: () -> Unit) {
         ) {
             MissionButton(Icons.Filled.Place, "MARCAR VÉRTICE", MarkGreen, Color.White, 56.dp) {
                 if (hasPosition) vertices.add(telemetry.latitude to telemetry.longitude)
-                else AppStatus.message.value = "Sin posición GPS para marcar el vértice"
+                else AppStatus.message.value = "El dron aún no reporta coordenadas (${telemetry.gpsSatelliteCount} satélites, ${telemetry.gpsSignalLevel}). Sal a un lugar abierto y espera la fijación GPS"
             }
             MissionButton(Icons.AutoMirrored.Filled.Undo, null, Color(0xE6FFFFFF), Color.DarkGray, 36.dp) {
                 if (vertices.isNotEmpty()) vertices.removeAt(vertices.lastIndex)

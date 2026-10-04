@@ -1,6 +1,7 @@
 package com.jesus.dronplataneras.flight
 
 import android.util.Log
+import com.jesus.dronplataneras.sdk.DJIConnectionManager
 import com.jesus.dronplataneras.sdk.readable
 import com.jesus.dronplataneras.sdk.runOnMain
 import dji.sdk.keyvalue.key.FlightControllerKey
@@ -22,7 +23,11 @@ object FlightActions {
             onFailure = { error ->
                 Log.e("MyApp", "KeyStartTakeoff onFailure: $error")
                 runOnMain {
-                    onStatus("Error al despegar: ${error.readable()}")
+                    val reason = DJIConnectionManager.currentHealthMessage()
+                    onStatus(
+                        if (reason != null) "No se puede despegar. $reason"
+                        else "No se pudo despegar (${error.readable()}). Revisa GPS, batería y temperatura del dron"
+                    )
                     onResult(false)
                 }
             }

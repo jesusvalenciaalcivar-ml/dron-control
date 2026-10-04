@@ -7,6 +7,7 @@ import dji.sdk.keyvalue.value.flightcontroller.GoHomeNeedConfirmType
 import dji.v5.et.action
 import dji.v5.et.create
 import dji.v5.manager.KeyManager
+import dji.v5.manager.diagnostic.DJIDeviceHealthInfo
 import dji.v5.manager.diagnostic.DeviceHealthManager
 import dji.v5.manager.diagnostic.WarningLevel
 
@@ -34,14 +35,21 @@ object DJIConnectionManager {
         }
     }
 
+    private fun topWarnings(infos: List<DJIDeviceHealthInfo>): List<DJIDeviceHealthInfo> =
+        infos.filter { it.warningLevel() in healthSeverityOrder }
+            .sortedBy { healthSeverityOrder.indexOf(it.warningLevel()) }
+
+    private fun DJIDeviceHealthInfo.readable(): String =
+        listOfNotNull(title(), description()).filter { it.isNotBlank() }.joinToString(": ")
+
+    // Mismos avisos que muestra DJI Fly (sobrecalentamiento, GPS, batería...), los 2 más graves
+    fun currentHealthMessage(): String? =
+        topWarnings(DeviceHealthManager.getInstance().currentDJIDeviceHealthInfos)
+            .take(2).joinToString(" · ") { it.readable() }.ifBlank { null }
+
     fun startHealthWatcher(onWarning: (String) -> Unit) {
         DeviceHealthManager.getInstance().addDJIDeviceHealthInfoChangeListener { infos ->
-            val topWarning = infos.minByOrNull { info ->
-                healthSeverityOrder.indexOf(info.warningLevel()).let { if (it == -1) Int.MAX_VALUE else it }
-            }
-            if (topWarning != null && healthSeverityOrder.contains(topWarning.warningLevel())) {
-                onWarning("${topWarning.title()}: ${topWarning.description()}")
-            }
+            topWarnings(infos).firstOrNull()?.let { onWarning(it.readable()) }
         }
     }
 

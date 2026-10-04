@@ -26,7 +26,7 @@ import dji.v5.common.register.DJISDKInitEvent
 import dji.v5.manager.SDKManager
 import dji.v5.manager.interfaces.SDKManagerCallback
 
-private enum class Screen { HOME, CONNECT, NOT_DETECTED, FLIGHT }
+private enum class Screen { HOME, CONNECT, NOT_DETECTED, FLIGHT, NTRIP }
 
 class MainActivity : AppCompatActivity() {
 
@@ -64,7 +64,8 @@ class MainActivity : AppCompatActivity() {
                     when (screen) {
                         Screen.HOME -> HomeScreen(
                             onEnterFlightScreen = { screen = Screen.FLIGHT },
-                            onConnect = { screen = Screen.CONNECT }
+                            onConnect = { screen = Screen.CONNECT },
+                            onOpenNtrip = { screen = Screen.NTRIP }
                         )
                         Screen.CONNECT -> ConnectScreen(
                             onConnected = { screen = Screen.HOME },
@@ -75,6 +76,7 @@ class MainActivity : AppCompatActivity() {
                             onHome = { screen = Screen.HOME }
                         )
                         Screen.FLIGHT -> MainScreen(onBack = { screen = Screen.HOME })
+                        Screen.NTRIP -> NtripScreen(onBack = { screen = Screen.HOME })
                     }
                 }
             }
