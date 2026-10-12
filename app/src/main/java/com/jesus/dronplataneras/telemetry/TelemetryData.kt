@@ -1,5 +1,8 @@
 package com.jesus.dronplataneras.telemetry
 
+/**
+ * Instantánea de la telemetría del dron (batería, posición, GPS, home, enlace). Es inmutable: [TelemetryManager] la reemplaza entera.
+ */
 data class TelemetryData(
     val batteryPercent: Int = 0,
     val altitude: Double=0.0,

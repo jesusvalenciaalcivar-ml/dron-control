@@ -12,7 +12,6 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.SettingsInputAntenna
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,28 +21,42 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import com.jesus.dronplataneras.data.AgroRepository
 import com.jesus.dronplataneras.sdk.DJIConnectionManager
 import com.jesus.dronplataneras.telemetry.TelemetryManager
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 private data class SampleMission(val name: String, val date: String, val hectares: String, val color: Color)
 
-private val sampleMissions = listOf(
-    SampleMission("Campo Norte Lote A", "Ayer, 14:30", "12.5", Color(0xFF4C8DFF)),
-    SampleMission("Sector Este Viñedo", "Oct 22, 09:15", "8.2", Color(0xFF7C6CF0)),
-    SampleMission("Perímetro Sur", "Oct 20, 16:45", "24.0", Color(0xFF4C8DFF))
-)
 
+/**
+ * Pantalla de inicio: estado del dron, misiones recientes y accesos a conexión, mapas sin conexión y NTRIP.
+ */
 @Composable
-fun HomeScreen(onEnterFlightScreen: () -> Unit, onConnect: () -> Unit, onOpenNtrip: () -> Unit) {
+fun HomeScreen(
+    onEnterFlightScreen: () -> Unit,
+    onConnect: () -> Unit,
+    onOpenNtrip: () -> Unit,
+    onOpenMaps: () -> Unit = {},
+    onSeeAllMissions: () -> Unit = {},
+    onOpenMission: (misionId: Long) -> Unit = {}
+) {
     val isConnected by DJIConnectionManager.isConnected
     val telemetry by TelemetryManager.telemetry
+    val context = LocalContext.current
+    val misiones by remember { AgroRepository.get(context).observeMisiones() }.collectAsState(initial = emptyList())
+    val colores = listOf(Color(0xFF4C8DFF), Color(0xFF7C6CF0), Color(0xFF1DB98A))
+    val recientes = misiones.take(3).mapIndexed { i, m ->
+        m.mision.id to SampleMission(
+            name = m.mision.nombre,
+            date = formatDayTime(m.mision.fechaActualizacion),
+            hectares = "%.1f".format(m.lote.lote.areaEstimadaHa),
+            color = colores[i % colores.size]
+        )
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         AppTopBar(
-            title = "AgroScan",
             center = {
                 OutlinedButton(
                     onClick = onOpenNtrip,
@@ -85,7 +98,7 @@ fun HomeScreen(onEnterFlightScreen: () -> Unit, onConnect: () -> Unit, onOpenNtr
                     ) {
                         Text("Bienvenido, Operador", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                         Text(
-                            text = SimpleDateFormat("d 'de' MMMM 'de' yyyy", Locale.forLanguageTag("es-ES")).format(Date()),
+                            text = formatLongDate(System.currentTimeMillis()),
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.Gray
                         )
@@ -114,6 +127,7 @@ fun HomeScreen(onEnterFlightScreen: () -> Unit, onConnect: () -> Unit, onOpenNtr
                     title = "Nueva Misión",
                     subtitle = "Configurar parámetros de vuelo automatizado.",
                     icon = Icons.Filled.FlightTakeoff,
+                    // Gris y deshabilitada mientras no haya dron conectado
                     background = if (isConnected) Color(0xFF00704A) else Color(0xFFB9C2BC),
                     contentColor = Color.White,
                     modifier = Modifier.weight(1f).fillMaxHeight(),
@@ -122,12 +136,12 @@ fun HomeScreen(onEnterFlightScreen: () -> Unit, onConnect: () -> Unit, onOpenNtr
 
                 FeatureCard(
                     title = "Explorar Mapas",
-                    subtitle = "Revisar ortomosaicos y topografía.",
+                    subtitle = "Descargar mapas sin conexión y ortomosaicos.",
                     icon = Icons.Filled.Map,
                     background = CardBg,
                     contentColor = Color.Black,
                     modifier = Modifier.weight(1f).fillMaxHeight(),
-                    onClick = null
+                    onClick = onOpenMaps
                 )
             }
 
@@ -140,12 +154,26 @@ fun HomeScreen(onEnterFlightScreen: () -> Unit, onConnect: () -> Unit, onOpenNtr
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text("Misiones Recientes", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Text("Ver Todo", color = AgroGreen, style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "Ver Todo", color = AgroGreen, style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.clickable(onClick = onSeeAllMissions)
+                    )
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    sampleMissions.forEach { mission ->
-                        MissionCard(mission, modifier = Modifier.weight(1f).fillMaxHeight())
+                    if (recientes.isEmpty()) {
+                        Box(
+                            Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(10.dp)).background(CardBg),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("Aún no hay misiones guardadas", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    recientes.forEach { (id, mission) ->
+                        MissionCard(
+                            mission,
+                            modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(10.dp)).clickable { onOpenMission(id) }
+                        )
                     }
                 }
             }

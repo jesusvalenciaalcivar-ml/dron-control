@@ -10,6 +10,9 @@ import dji.sdk.keyvalue.value.common.ComponentIndexType
 import dji.v5.manager.datacenter.MediaDataCenter
 import dji.v5.manager.interfaces.ICameraStreamManager
 
+/**
+ * Vista en vivo de la cámara del dron: una TextureView registrada en el gestor de video del SDK que se libera al salir de composición.
+ */
 @Composable
 fun CameraPreview(modifier: Modifier = Modifier) {
     AndroidView(

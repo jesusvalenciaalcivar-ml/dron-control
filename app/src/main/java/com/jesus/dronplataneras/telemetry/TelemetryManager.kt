@@ -3,6 +3,7 @@ package com.jesus.dronplataneras.telemetry
 import androidx.compose.runtime.mutableStateOf
 import com.jesus.dronplataneras.flight.FlightActions
 import com.jesus.dronplataneras.sdk.AppStatus
+import com.jesus.dronplataneras.sdk.DJIConnectionManager
 import dji.sdk.keyvalue.key.AirLinkKey
 import dji.sdk.keyvalue.key.BatteryKey
 import dji.sdk.keyvalue.key.FlightControllerKey
@@ -10,6 +11,9 @@ import dji.sdk.keyvalue.key.KeyTools
 import dji.v5.manager.KeyManager
 import kotlin.math.sqrt
 
+/**
+ * Telemetría del dron en un estado observable desde Compose, más el regreso automático al bajar de la batería mínima.
+ */
 object TelemetryManager {
 
     val telemetry = mutableStateOf(TelemetryData())
@@ -17,81 +21,91 @@ object TelemetryManager {
     private const val LOW_BATTERY_THRESHOLD = 20
     private const val LOW_BATTERY_RESET_THRESHOLD = 30
     private var autoRTHTriggered = false
+    private val lock = Any()
 
+    /**
+     * Cambia un campo sin pisar los de otros listeners: el SDK avisa desde varios hilos y un
+     * `value = value.copy(...)` simultáneo perdería uno de los dos cambios.
+     */
+    fun mutate(block: TelemetryData.() -> TelemetryData) {
+        synchronized(lock) { telemetry.value = telemetry.value.block() }
+    }
+
+    /**
+     * Empieza a escuchar las llaves del SDK (llamar tras registrar el SDK).
+     */
     fun startListening() {
         KeyManager.getInstance().listen(
             KeyTools.createKey(BatteryKey.KeyChargeRemainingInPercent), this
         ) { _, newValue ->
             val percent = newValue ?: 0
-            telemetry.value = telemetry.value.copy(batteryPercent = percent)
+            mutate { copy(batteryPercent = percent) }
             checkLowBattery(percent)
         }
 
         KeyManager.getInstance().listen(
             KeyTools.createKey(FlightControllerKey.KeyAltitude), this
         ) { _, newValue ->
-            telemetry.value = telemetry.value.copy(altitude = newValue ?: 0.0)
+            mutate { copy(altitude = newValue ?: 0.0) }
         }
 
         KeyManager.getInstance().listen(
             KeyTools.createKey(FlightControllerKey.KeyAircraftVelocity), this
         ) { _, newValue ->
             val speed = newValue?.let { sqrt(it.x * it.x + it.y * it.y + it.z * it.z) } ?: 0.0
-            telemetry.value = telemetry.value.copy(speed = speed)
+            mutate { copy(speed = speed) }
         }
 
         KeyManager.getInstance().listen(
             KeyTools.createKey(FlightControllerKey.KeyAircraftLocation3D), this
         ) { _, newValue ->
             newValue?.let {
-                telemetry.value = telemetry.value.copy(
-                    latitude = it.latitude,
-                    longitude = it.longitude
-                )
+                mutate { copy(latitude = it.latitude, longitude = it.longitude) }
             }
         }
 
         KeyManager.getInstance().listen(
             KeyTools.createKey(FlightControllerKey.KeyGPSSatelliteCount), this
         ) { _, newValue ->
-            telemetry.value = telemetry.value.copy(gpsSatelliteCount = newValue ?: 0)
+            mutate { copy(gpsSatelliteCount = newValue ?: 0) }
         }
 
         KeyManager.getInstance().listen(
             KeyTools.createKey(FlightControllerKey.KeyGPSSignalLevel), this
         ) { _, newValue ->
-            telemetry.value = telemetry.value.copy(gpsSignalLevel = newValue?.toString() ?: "")
+            mutate { copy(gpsSignalLevel = newValue?.toString() ?: "") }
         }
 
         KeyManager.getInstance().listen(
             KeyTools.createKey(FlightControllerKey.KeyIsHomeLocationSet), this
         ) { _, newValue ->
-            telemetry.value = telemetry.value.copy(homeLocationSet = newValue ?: false)
+            mutate { copy(homeLocationSet = newValue ?: false) }
         }
 
         KeyManager.getInstance().listen(
             KeyTools.createKey(FlightControllerKey.KeyFlightMode), this
         ) { _, newValue ->
-            telemetry.value = telemetry.value.copy(flightMode = newValue?.toString() ?: "")
+            mutate { copy(flightMode = newValue?.toString() ?: "") }
         }
 
         KeyManager.getInstance().listen(
             KeyTools.createKey(FlightControllerKey.KeyHomeLocation), this
         ) { _, newValue ->
             newValue?.let {
-                telemetry.value = telemetry.value.copy(homeLatitude = it.latitude, homeLongitude = it.longitude)
+                mutate { copy(homeLatitude = it.latitude, homeLongitude = it.longitude) }
             }
         }
 
         KeyManager.getInstance().listen(
             KeyTools.createKey(AirLinkKey.KeySignalQuality), this
         ) { _, newValue ->
-            telemetry.value = telemetry.value.copy(signalQuality = newValue ?: 0)
+            mutate { copy(signalQuality = newValue ?: 0) }
         }
     }
 
     private fun checkLowBattery(percent: Int){
-        if (percent in 1..LOW_BATTERY_THRESHOLD && !autoRTHTriggered){
+        // En tierra un RTH no tiene sentido (y se dispararía al conectar un dron con la batería baja)
+        if (percent in 1..LOW_BATTERY_THRESHOLD && !autoRTHTriggered && DJIConnectionManager.isFlying.value){
             autoRTHTriggered = true
             AppStatus.message.value = "Bateria al $percent% -- regreso automatico activado"
             FlightActions.returnToHome { status ->
@@ -102,6 +116,9 @@ object TelemetryManager {
         }
     }
 
+    /**
+     * Deja de escuchar las llaves de este objeto.
+     */
     fun stopListening() {
         KeyManager.getInstance().cancelListen(this)
     }

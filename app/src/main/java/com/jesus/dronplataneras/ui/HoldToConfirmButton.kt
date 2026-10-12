@@ -21,6 +21,9 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+/**
+ * Botón circular que exige mantenerlo pulsado ([holdDurationMillis]) para ejecutar la acción; evita toques accidentales.
+ */
 @Composable
 fun HoldToConfirmButton(
     text: String,

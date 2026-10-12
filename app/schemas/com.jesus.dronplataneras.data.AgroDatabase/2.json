@@ -1,0 +1,572 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "6e711809ca6923c8de3ded4fe449172d",
+    "entities": [
+      {
+        "tableName": "lotes",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `nombre` TEXT NOT NULL, `areaEstimadaHa` REAL NOT NULL, `fechaCreacion` INTEGER NOT NULL, `uuid` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nombre",
+            "columnName": "nombre",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "areaEstimadaHa",
+            "columnName": "areaEstimadaHa",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fechaCreacion",
+            "columnName": "fechaCreacion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "uuid",
+            "columnName": "uuid",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_lotes_uuid",
+            "unique": true,
+            "columnNames": [
+              "uuid"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_lotes_uuid` ON `${TABLE_NAME}` (`uuid`)"
+          }
+        ]
+      },
+      {
+        "tableName": "vertices",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `loteId` INTEGER NOT NULL, `ordenSecuencia` INTEGER NOT NULL, `latitud` REAL NOT NULL, `longitud` REAL NOT NULL, FOREIGN KEY(`loteId`) REFERENCES `lotes`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "loteId",
+            "columnName": "loteId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ordenSecuencia",
+            "columnName": "ordenSecuencia",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "latitud",
+            "columnName": "latitud",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "longitud",
+            "columnName": "longitud",
+            "affinity": "REAL",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_vertices_loteId_ordenSecuencia",
+            "unique": true,
+            "columnNames": [
+              "loteId",
+              "ordenSecuencia"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_vertices_loteId_ordenSecuencia` ON `${TABLE_NAME}` (`loteId`, `ordenSecuencia`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "lotes",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "loteId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "parametros_vuelo",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `alturaMetros` REAL NOT NULL, `traslapePorcentaje` REAL NOT NULL, `margenInternoMetros` REAL NOT NULL, `alturaCopaMetros` REAL NOT NULL, `traslapeFrontalPorcentaje` REAL NOT NULL, `modoCaptura` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "alturaMetros",
+            "columnName": "alturaMetros",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "traslapePorcentaje",
+            "columnName": "traslapePorcentaje",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "margenInternoMetros",
+            "columnName": "margenInternoMetros",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "alturaCopaMetros",
+            "columnName": "alturaCopaMetros",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "traslapeFrontalPorcentaje",
+            "columnName": "traslapeFrontalPorcentaje",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "modoCaptura",
+            "columnName": "modoCaptura",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "misiones",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `nombre` TEXT NOT NULL, `loteId` INTEGER NOT NULL, `parametrosId` INTEGER NOT NULL, `estado` TEXT NOT NULL, `duracionEstimadaMin` REAL NOT NULL, `fotosEstimadas` INTEGER NOT NULL, `rutaWaypointsJson` TEXT, `fechaCreacion` INTEGER NOT NULL, `fechaActualizacion` INTEGER NOT NULL, `uuid` TEXT NOT NULL, FOREIGN KEY(`loteId`) REFERENCES `lotes`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`parametrosId`) REFERENCES `parametros_vuelo`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nombre",
+            "columnName": "nombre",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "loteId",
+            "columnName": "loteId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "parametrosId",
+            "columnName": "parametrosId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "estado",
+            "columnName": "estado",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "duracionEstimadaMin",
+            "columnName": "duracionEstimadaMin",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fotosEstimadas",
+            "columnName": "fotosEstimadas",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rutaWaypointsJson",
+            "columnName": "rutaWaypointsJson",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "fechaCreacion",
+            "columnName": "fechaCreacion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fechaActualizacion",
+            "columnName": "fechaActualizacion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "uuid",
+            "columnName": "uuid",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_misiones_loteId",
+            "unique": false,
+            "columnNames": [
+              "loteId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_misiones_loteId` ON `${TABLE_NAME}` (`loteId`)"
+          },
+          {
+            "name": "index_misiones_parametrosId",
+            "unique": false,
+            "columnNames": [
+              "parametrosId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_misiones_parametrosId` ON `${TABLE_NAME}` (`parametrosId`)"
+          },
+          {
+            "name": "index_misiones_estado",
+            "unique": false,
+            "columnNames": [
+              "estado"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_misiones_estado` ON `${TABLE_NAME}` (`estado`)"
+          },
+          {
+            "name": "index_misiones_uuid",
+            "unique": true,
+            "columnNames": [
+              "uuid"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_misiones_uuid` ON `${TABLE_NAME}` (`uuid`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "lotes",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "loteId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "parametros_vuelo",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "parametrosId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "vuelos",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `uuid` TEXT NOT NULL, `misionId` INTEGER NOT NULL, `estado` TEXT NOT NULL, `fechaInicio` INTEGER NOT NULL, `fechaFin` INTEGER, `modoCaptura` TEXT NOT NULL, `perimetroJson` TEXT NOT NULL, `rutaJson` TEXT NOT NULL, `totalWaypoints` INTEGER NOT NULL, `siguienteWaypoint` INTEGER NOT NULL, FOREIGN KEY(`misionId`) REFERENCES `misiones`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "uuid",
+            "columnName": "uuid",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "misionId",
+            "columnName": "misionId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "estado",
+            "columnName": "estado",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fechaInicio",
+            "columnName": "fechaInicio",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fechaFin",
+            "columnName": "fechaFin",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "modoCaptura",
+            "columnName": "modoCaptura",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "perimetroJson",
+            "columnName": "perimetroJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rutaJson",
+            "columnName": "rutaJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalWaypoints",
+            "columnName": "totalWaypoints",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "siguienteWaypoint",
+            "columnName": "siguienteWaypoint",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_vuelos_misionId",
+            "unique": false,
+            "columnNames": [
+              "misionId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_vuelos_misionId` ON `${TABLE_NAME}` (`misionId`)"
+          },
+          {
+            "name": "index_vuelos_uuid",
+            "unique": true,
+            "columnNames": [
+              "uuid"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_vuelos_uuid` ON `${TABLE_NAME}` (`uuid`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "misiones",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "misionId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "salidas",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `uuid` TEXT NOT NULL, `vueloId` INTEGER NOT NULL, `indice` INTEGER NOT NULL, `desdeWaypoint` INTEGER NOT NULL, `hastaWaypoint` INTEGER NOT NULL, `estado` TEXT NOT NULL, `motivo` TEXT, `inicioMs` INTEGER NOT NULL, `finMs` INTEGER, `bateriaInicio` INTEGER NOT NULL, `bateriaFin` INTEGER, `videoInicioMs` INTEGER, `videoFinMs` INTEGER, `distanciaM` REAL NOT NULL, `logPath` TEXT, FOREIGN KEY(`vueloId`) REFERENCES `vuelos`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "uuid",
+            "columnName": "uuid",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vueloId",
+            "columnName": "vueloId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "indice",
+            "columnName": "indice",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "desdeWaypoint",
+            "columnName": "desdeWaypoint",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hastaWaypoint",
+            "columnName": "hastaWaypoint",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "estado",
+            "columnName": "estado",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "motivo",
+            "columnName": "motivo",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "inicioMs",
+            "columnName": "inicioMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "finMs",
+            "columnName": "finMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "bateriaInicio",
+            "columnName": "bateriaInicio",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bateriaFin",
+            "columnName": "bateriaFin",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "videoInicioMs",
+            "columnName": "videoInicioMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "videoFinMs",
+            "columnName": "videoFinMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "distanciaM",
+            "columnName": "distanciaM",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "logPath",
+            "columnName": "logPath",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_salidas_vueloId_indice",
+            "unique": true,
+            "columnNames": [
+              "vueloId",
+              "indice"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_salidas_vueloId_indice` ON `${TABLE_NAME}` (`vueloId`, `indice`)"
+          },
+          {
+            "name": "index_salidas_uuid",
+            "unique": true,
+            "columnNames": [
+              "uuid"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_salidas_uuid` ON `${TABLE_NAME}` (`uuid`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "vuelos",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "vueloId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '6e711809ca6923c8de3ded4fe449172d')"
+    ]
+  }
+}

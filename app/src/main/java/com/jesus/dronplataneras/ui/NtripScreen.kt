@@ -25,6 +25,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 
+/**
+ * Formulario de configuración NTRIP (host, puerto, punto de montaje, usuario y contraseña). Provisional: aún no abre ninguna conexión.
+ */
 @Composable
 fun NtripScreen(onBack: () -> Unit) {
     var host by remember { mutableStateOf("") }
@@ -35,7 +38,6 @@ fun NtripScreen(onBack: () -> Unit) {
 
     Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF3F4F5))) {
         AppTopBar(
-            title = "AgroScan",
             center = {
                 OutlinedButton(
                     onClick = onBack,
