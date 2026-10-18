@@ -27,6 +27,11 @@
             android:name="com.dji.sdk.API_KEY"
             android:value="${djiApiKey}" />
 
+        <!-- Token público de Mapbox (local.properties: MAPBOX_ACCESS_TOKEN=pk....) -->
+        <meta-data
+            android:name="com.jesus.dronplataneras.MAPBOX_ACCESS_TOKEN"
+            android:value="${mapboxAccessToken}" />
+
         <activity
             android:name=".ui.MainActivity"
             android:screenOrientation="landscape"

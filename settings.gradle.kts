@@ -19,6 +19,19 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Mapbox Maps SDK
+        maven {
+            url = uri("https://api.mapbox.com/downloads/v2/releases/maven")
+            content { includeGroupByRegex("com\\.mapbox.*") }
+            val token = providers.gradleProperty("MAPBOX_DOWNLOADS_TOKEN").orNull
+            if (token != null) {
+                credentials {
+                    username = "mapbox"
+                    password = token
+                }
+                authentication { create<BasicAuthentication>("basic") }
+            }
+        }
     }
 }
 

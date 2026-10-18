@@ -1,9 +1,9 @@
 package com.jesus.dronplataneras.ui
 
 import android.location.Location
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,10 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -39,10 +36,14 @@ import com.jesus.dronplataneras.R
 import com.jesus.dronplataneras.flight.FlightActions
 import com.jesus.dronplataneras.sdk.AppStatus
 import com.jesus.dronplataneras.sdk.DJIConnectionManager
+import com.jesus.dronplataneras.survey.PolygonGeometry
+import com.jesus.dronplataneras.map.AgroMap
+import com.jesus.dronplataneras.map.MapLayers
+import com.jesus.dronplataneras.survey.SurveySession
+import com.jesus.dronplataneras.survey.toLatLon
+import com.jesus.dronplataneras.survey.LatLon as GeoLatLon
 import com.jesus.dronplataneras.telemetry.TelemetryManager
 import kotlinx.coroutines.delay
-import kotlin.math.cos
-import kotlin.math.max
 import kotlin.math.min
 
 private val HudBackground = Color(0xAA000000)
@@ -50,16 +51,27 @@ private val HudBarBackground = Color(0xE6FFFFFF)
 private val MarkGreen = Color(0xFF00704A)
 private val CloseBlue = Color(0xFF1565C0)
 
-// (latitud, longitud)
-private typealias LatLon = Pair<Double, Double>
 
+/**
+ * Vista de cámara a pantalla completa. Comparte los vértices con el editor de perímetro
+ * (SurveySession), así se puede fijar esquinas mirando el video y terminar en el mapa.
+ */
 @Composable
-fun MainScreen(onBack: () -> Unit) {
+fun MainScreen(onBack: () -> Unit, onOpenEditor: () -> Unit) {
     val isConnected by DJIConnectionManager.isConnected
     val isFlying by DJIConnectionManager.isFlying
     val statusMessage by AppStatus.message
     val telemetry by TelemetryManager.telemetry
-    val vertices = remember { mutableStateListOf<LatLon>() }
+    // Los vértices viven en SurveySession: sobreviven a salir/volver de la pantalla
+    val vertices = SurveySession.vertices
+    val areaHa = PolygonGeometry.areaSquareMeters(vertices) / 10_000
+
+    fun report(result: SurveySession.Result) {
+        AppStatus.message.value = when (result) {
+            is SurveySession.Result.Ok -> result.message
+            is SurveySession.Result.Rejected -> result.reason
+        }
+    }
 
     LaunchedEffect(statusMessage) {
         if (statusMessage.isNotEmpty()) {
@@ -81,8 +93,9 @@ fun MainScreen(onBack: () -> Unit) {
     } else 0f
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        val mapWidth = min(150f, maxWidth.value * 0.26f).dp
-        val mapHeight = min(90f, maxHeight.value * 0.26f).dp
+        // Proporción 16:9 como la miniatura de DJI Fly
+        val mapWidth = min(220f, maxWidth.value * 0.28f).dp
+        val mapHeight = (mapWidth.value * 0.5625f).dp
 
         CameraPreview(modifier = Modifier.fillMaxSize())
 
@@ -158,28 +171,45 @@ fun MainScreen(onBack: () -> Unit) {
             )
         }
 
-        // Mini mapa (abajo izquierda)
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(10.dp)
-                .width(mapWidth)
-                .clip(RoundedCornerShape(8.dp))
-                .background(Color.White)
+        // Mini mapa, como en DJI Fly: es el mismo mapa del editor de perímetro. Se arrastra a cualquier esquina;
+        // al tocarlo se intercambia: el mapa pasa a pantalla completa y la cámara a la miniatura.
+        DraggableThumbnail(
+            containerWidth = maxWidth, containerHeight = maxHeight,
+            width = mapWidth, height = mapHeight, margin = 10.dp, topInset = 56.dp,
+            endInset = 106.dp   // deja libres los botones de la derecha
         ) {
+            AgroMap(
+                layers = MapLayers(
+                    polygon = vertices.map { it.toLatLon() },
+                    polygonClosed = vertices.size >= 3,
+                    drone = if (hasPosition) GeoLatLon(telemetry.latitude, telemetry.longitude) else null,
+                    home = if (telemetry.homeLocationSet) GeoLatLon(telemetry.homeLatitude, telemetry.homeLongitude) else null,
+                    highlightLastVertex = true
+                ),
+                modifier = Modifier.fillMaxSize(),
+                followDrone = hasPosition,
+                interactive = false
+            )
+            // Capa encima del mapa: recibe el toque (el MapView no debe moverse en miniatura)
+            Box(Modifier.fillMaxSize().clickable(onClick = onOpenEditor))
             Row(
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .background(Color(0x99000000), RoundedCornerShape(bottomEnd = 8.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Filled.Map, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(11.dp))
+                Icon(Icons.Filled.Map, contentDescription = null, tint = Color.White, modifier = Modifier.size(11.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Mapa", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                Text(
+                    when {
+                        vertices.size >= 3 -> "${vertices.size} pts · %.2f ha".format(areaHa)
+                        vertices.isNotEmpty() -> "${vertices.size} pts"
+                        else -> "MAPA"
+                    },
+                    color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold
+                )
             }
-            MiniMap(
-                vertices = vertices,
-                drone = if (hasPosition) telemetry.latitude to telemetry.longitude else null,
-                modifier = Modifier.fillMaxWidth().height(mapHeight)
-            )
         }
 
         // Derecha: marcar vértice, deshacer, cerrar polígono
@@ -187,15 +217,18 @@ fun MainScreen(onBack: () -> Unit) {
             modifier = Modifier.align(Alignment.CenterEnd).padding(end = 10.dp).width(86.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            MissionButton(Icons.Filled.Place, "MARCAR VÉRTICE", MarkGreen, Color.White, 56.dp) {
-                if (hasPosition) vertices.add(telemetry.latitude to telemetry.longitude)
-                else AppStatus.message.value = "El dron aún no reporta coordenadas (${telemetry.gpsSatelliteCount} satélites, ${telemetry.gpsSignalLevel}). Sal a un lugar abierto y espera la fijación GPS"
+            MissionButton(Icons.Filled.Place, "MARCAR VÉRTICE ${vertices.size + 1}", MarkGreen, Color.White, 56.dp) {
+                report(SurveySession.capture(telemetry, isConnected))
             }
             MissionButton(Icons.AutoMirrored.Filled.Undo, null, Color(0xE6FFFFFF), Color.DarkGray, 36.dp) {
-                if (vertices.isNotEmpty()) vertices.removeAt(vertices.lastIndex)
+                SurveySession.undo()
             }
-            // ponytail: por ahora no hace nada (pendiente definir qué hace al cerrar el polígono)
-            MissionButton(Icons.Filled.CheckCircle, "CERRAR POLÍGONO", CloseBlue, Color.White, 56.dp) {}
+            // El cierre y el guardado se hacen en el editor de perímetro (mapa)
+            MissionButton(
+                Icons.Filled.CheckCircle, "EDITOR / CERRAR",
+                if (vertices.size >= 3) CloseBlue else Color(0xFF90A4AE), Color.White, 56.dp,
+                onClick = onOpenEditor
+            )
         }
     }
 }
@@ -225,42 +258,6 @@ private fun MissionButton(
     }
 }
 
-@Composable
-private fun MiniMap(vertices: List<LatLon>, drone: LatLon?, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.background(Color(0xFFE8EDE6))) {
-        val pts = vertices + listOfNotNull(drone)
-        if (pts.isEmpty()) return@Canvas
-
-        // proyección plana: la longitud se escala por cos(latitud)
-        val k = cos(Math.toRadians(pts.map { it.first }.average()))
-        val xs = pts.map { it.second * k }
-        val ys = pts.map { -it.first }
-        val minX = xs.min()
-        val minY = ys.min()
-        val span = max(xs.max() - minX, ys.max() - minY).coerceAtLeast(1e-7)
-        val pad = 14f
-        val scale = (min(size.width, size.height) - 2 * pad) / span
-        val offX = (size.width - (xs.max() - minX) * scale) / 2
-        val offY = (size.height - (ys.max() - minY) * scale) / 2
-
-        fun project(p: LatLon) = Offset((offX + (p.second * k - minX) * scale).toFloat(), (offY + (-p.first - minY) * scale).toFloat())
-
-        val mapped = vertices.map(::project)
-        if (mapped.size >= 3) {
-            val path = Path().apply {
-                moveTo(mapped[0].x, mapped[0].y)
-                mapped.drop(1).forEach { lineTo(it.x, it.y) }
-                close()
-            }
-            drawPath(path, Color(0x6676C442))
-            drawPath(path, Color(0xFF4CAF50), style = Stroke(width = 3f))
-        } else if (mapped.size == 2) {
-            drawLine(Color(0xFF4CAF50), mapped[0], mapped[1], strokeWidth = 3f)
-        }
-        mapped.forEach { drawCircle(Color(0xFF2E7D32), radius = 4f, center = it) }
-        drone?.let { drawCircle(Color(0xFF1565C0), radius = 5f, center = project(it)) }
-    }
-}
 
 @Composable
 private fun HudStat(icon: ImageVector, label: String, value: String) {

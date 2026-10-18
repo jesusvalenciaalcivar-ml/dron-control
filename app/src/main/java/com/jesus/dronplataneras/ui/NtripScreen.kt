@@ -35,7 +35,6 @@ fun NtripScreen(onBack: () -> Unit) {
 
     Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF3F4F5))) {
         AppTopBar(
-            title = "AgroScan",
             center = {
                 OutlinedButton(
                     onClick = onBack,

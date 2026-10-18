@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sync
@@ -30,6 +30,9 @@ import kotlinx.coroutines.delay
 private val ScreenBg = Color(0xFFF3F4F5)
 private const val SEARCH_TIMEOUT_MS = 10_000L
 
+/**
+ * Pantalla que espera la conexión del dron: avanza sola al conectar y pasa a [NotDetectedScreen] a los 10 s sin señal.
+ */
 @Composable
 fun ConnectScreen(onConnected: () -> Unit, onNotDetected: () -> Unit) {
     val isConnected by DJIConnectionManager.isConnected
@@ -42,7 +45,7 @@ fun ConnectScreen(onConnected: () -> Unit, onNotDetected: () -> Unit) {
     }
 
     Column(modifier = Modifier.fillMaxSize().background(ScreenBg)) {
-        AppTopBar("AgroScan Pro") { StatusPill(isConnected) }
+        AppTopBar { StatusPill(isConnected) }
 
         Box(modifier = Modifier.fillMaxSize().padding(12.dp), contentAlignment = Alignment.Center) {
             Row(
@@ -125,13 +128,16 @@ private fun StepRow(number: Int, text: String, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * Pantalla cuando no se detecta el dron: reintentar la búsqueda o volver al inicio.
+ */
 @Composable
 fun NotDetectedScreen(onRetry: () -> Unit, onHome: () -> Unit) {
     val isConnected by DJIConnectionManager.isConnected
     LaunchedEffect(isConnected) { if (isConnected) onHome() }
 
     Column(modifier = Modifier.fillMaxSize().background(ScreenBg)) {
-        AppTopBar("AgroScan Pro") {
+        AppTopBar {
             Box(
                 modifier = Modifier.clip(RoundedCornerShape(50)).background(DangerBg).padding(horizontal = 12.dp, vertical = 4.dp)
             ) {
@@ -191,7 +197,7 @@ fun NotDetectedScreen(onRetry: () -> Unit, onHome: () -> Unit) {
                             shape = RoundedCornerShape(8.dp),
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                         ) {
-                            Icon(Icons.Filled.HelpOutline, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Volver a inicio", style = MaterialTheme.typography.bodyMedium, maxLines = 1)
                         }

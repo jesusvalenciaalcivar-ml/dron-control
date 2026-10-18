@@ -2,14 +2,22 @@ package com.jesus.dronplataneras.flight
 
 import android.util.Log
 import com.jesus.dronplataneras.sdk.DJIConnectionManager
+import com.jesus.dronplataneras.sdk.detail
 import com.jesus.dronplataneras.sdk.readable
 import com.jesus.dronplataneras.sdk.runOnMain
 import dji.sdk.keyvalue.key.FlightControllerKey
 import dji.v5.et.action
 import dji.v5.et.create
 
+/**
+ * Órdenes de vuelo al dron (despegar, regresar a casa, aterrizar, quitar el mando automático).
+ * Cada una avisa su resultado por callback en el hilo principal.
+ */
 object FlightActions {
 
+    /**
+     * Despega a la altura automática del dron (~1,2 m). Si falla, el mensaje explica el motivo con los avisos de salud del dron.
+     */
     fun takeOffToTargetHeight(onStatus: (String) -> Unit, onResult: (Boolean) -> Unit = {}) {
         Log.d("MyApp", "takeOffToTargetHeight() llamada")
         FlightControllerKey.KeyStartTakeoff.create().action(
@@ -23,10 +31,12 @@ object FlightActions {
             onFailure = { error ->
                 Log.e("MyApp", "KeyStartTakeoff onFailure: $error")
                 runOnMain {
-                    val reason = DJIConnectionManager.currentHealthMessage()
+                    // Todos los avisos del dron, de cualquier nivel: el motivo real suele estar ahí
+                    val reasons = DJIConnectionManager.allHealthMessages()
+                    Log.e("MyApp", "Avisos de salud al fallar el despegue: ${reasons.ifEmpty { listOf("ninguno") }}")
                     onStatus(
-                        if (reason != null) "No se puede despegar. $reason"
-                        else "No se pudo despegar (${error.readable()}). Revisa GPS, batería y temperatura del dron"
+                        if (reasons.isNotEmpty()) "No se puede despegar: ${reasons.take(3).joinToString(" · ")}"
+                        else "El dron rechazó el despegue (${error.detail()}). Prueba despegar desde DJI Fly: ahí se muestra el motivo"
                     )
                     onResult(false)
                 }
@@ -34,6 +44,9 @@ object FlightActions {
         )
     }
 
+    /**
+     * Inicia el regreso a casa (RTH) del propio dron.
+     */
     fun returnToHome(onStatus: (String) -> Unit) {
         FlightControllerKey.KeyStartGoHome.create().action(
             onSuccess = { runOnMain { onStatus("Regresando a casa") } },
@@ -41,6 +54,40 @@ object FlightActions {
         )
     }
 
+    /**
+     * Fija el punto de origen (Home) en la posición actual del dron. Solo tiene sentido en tierra y con GPS: es el punto al que
+     * volverá con RTH y donde aterrizará.
+     */
+    fun setHomeHere(onStatus: (String) -> Unit) {
+        FlightControllerKey.KeyHomeLocationUsingCurrentAircraftLocation.create().action(
+            onSuccess = { runOnMain { onStatus("Punto de origen fijado en la posición actual del dron") } },
+            onFailure = { error -> runOnMain { onStatus("No se pudo fijar el punto de origen: ${error.readable()}") } }
+        )
+    }
+
+    /**
+     * Quita al dron el mando automático (regreso a casa y aterrizaje): queda en hover para que el
+     * piloto lo guíe con el control remoto. Se piden las dos cancelaciones porque el SDK separa el
+     * regreso a casa del aterrizaje; basta con que una surta efecto.
+     */
+    fun takeManualControl(onStatus: (String) -> Unit) {
+        val reported = java.util.concurrent.atomic.AtomicBoolean(false)
+        val failures = java.util.concurrent.atomic.AtomicInteger(0)
+        fun ok() {
+            if (reported.compareAndSet(false, true)) runOnMain { onStatus("Control manual: el dron queda en hover") }
+        }
+        fun fail(error: dji.v5.common.error.IDJIError) {
+            if (failures.incrementAndGet() == 2 && !reported.get()) {
+                runOnMain { onStatus("No se pudo pasar a control manual: ${error.readable()}. Usa el control remoto") }
+            }
+        }
+        FlightControllerKey.KeyStopGoHome.create().action(onSuccess = { ok() }, onFailure = { fail(it) })
+        FlightControllerKey.KeyStopAutoLanding.create().action(onSuccess = { ok() }, onFailure = { fail(it) })
+    }
+
+    /**
+     * Aterriza en el sitio. Si el dron duda del terreno pedirá confirmación (ver `LandingDecisionBar`).
+     */
     fun landNow(onStatus: (String) -> Unit, onResult: (Boolean) -> Unit = {}) {
         FlightControllerKey.KeyStartAutoLanding.create().action(
             onSuccess = { runOnMain { onStatus("Aterrizando..."); onResult(true) } },
@@ -48,6 +95,9 @@ object FlightActions {
         )
     }
 
+    /**
+     * Cancela el aterrizaje en curso: el dron queda en hover.
+     */
     fun cancelLanding(onStatus: (String) -> Unit, onResult: (Boolean) -> Unit = {}) {
         FlightControllerKey.KeyStopAutoLanding.create().action(
             onSuccess = { runOnMain { onStatus("Aterrizaje cancelado, en hover"); onResult(true) } },
