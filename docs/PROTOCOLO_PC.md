@@ -1,7 +1,14 @@
-# Protocolo teléfono → PC (telemetría en vivo)
+# Protocolo teléfono → PC
 
-Contrato entre la app del dron (`network/TelemetryStream`, `network/TelemetryPacket`) y la app de escritorio
-(`features/telemetry/TelemetryReceiver`, en el proyecto AgroScan-Desktop). Si se cambia un lado, se cambia aquí y en el otro.
+Contrato entre la app del dron y la app de escritorio (proyecto AgroScan-Desktop). Si se cambia un lado, se cambia aquí y en el otro.
+Hay dos canales, los dos sobre el Wi-Fi `AgroScan` de la PC y sin internet:
+
+| Canal | Qué lleva | Teléfono | PC |
+|---|---|---|---|
+| **Telemetría en vivo** — UDP 8765 | Posición, batería, estado y ruta, varias veces por segundo. Si se pierde un paquete no importa | `network/TelemetryStream`, `network/TelemetryPacket` | `features/telemetry/TelemetryReceiver` |
+| **Registros de vuelo** — HTTP (TCP) 8766 | El registro de cada salida y sus eventos con las **marcas del video**. Cada envío se confirma | `network/FlightLogSync` | `features/flightlog/FlightLogServer` |
+
+Las secciones que siguen hasta "Registros de vuelo" son de la telemetría en vivo.
 
 ## Transporte
 - **UDP**, del teléfono a la PC, puerto **8765**. El teléfono envía; la PC escucha **solo en su IP de la zona móvil** (`192.168.137.1`) y solo mientras la Red Local está encendida.
@@ -77,14 +84,15 @@ La PC arma la estela del dron con las posiciones recibidas y la vacía al empeza
 ## Windows y seguridad
 **El usuario no escribe ningún comando.** La primera vez que enciende la Red Local en la app de escritorio, Windows muestra una sola
 ventana: *"¿Quieres permitir que esta aplicación haga cambios en el dispositivo?"* → **Sí**. Con eso la app crea la regla del Firewall
-(`features/telemetry/TelemetryFirewall` en AgroScan-Desktop). Si la regla ya existe no vuelve a preguntar. Si el usuario responde **No**,
+(`features/redlocal/LocalFirewall` en AgroScan-Desktop). Si la regla ya existe no vuelve a preguntar. Si el usuario responde **No**,
 la pantalla de Red Local avisa que el teléfono no podrá enviar datos; basta con apagar y encender la Red Local para volver a intentarlo.
 
-La regla que crea es lo más estrecha posible: entrada **UDP 8765**, solo en la IP local `192.168.137.1`, solo desde `192.168.137.0/24`
-y solo para el programa de AgroScan (`AgroScan.exe` instalado, o el `java.exe` con que corre en desarrollo). Se llama
-`AgroScan telemetria xxxxxxxx`, donde `xxxxxxxx` es una huella de la ruta del programa: si AgroScan cambia de lugar, la regla se rehace.
+Crea dos reglas con esa única confirmación, lo más estrechas posible: entrada **UDP 8765** (`AgroScan telemetria xxxxxxxx`) y
+**TCP 8766** (`AgroScan registros xxxxxxxx`), cada una solo en la IP local `192.168.137.1`, solo desde `192.168.137.0/24` y solo para el
+programa de AgroScan (`AgroScan.exe` instalado, o el `java.exe` con que corre en desarrollo). `xxxxxxxx` es una huella de la ruta del
+programa: si AgroScan cambia de lugar, las reglas se rehacen.
 
-- Para quitarla: en PowerShell como administrador, `Get-NetFirewallRule -DisplayName 'AgroScan telemetria*' | Remove-NetFirewallRule`.
+- Para quitarlas: en PowerShell como administrador, `Get-NetFirewallRule -DisplayName 'AgroScan *' | Remove-NetFirewallRule`.
 - Si al abrir la app Windows muestra *"El Firewall de Windows bloqueó algunas características"*, se puede **cancelar**: la regla de arriba
   ya da el permiso justo que hace falta.
 - Desactivar el ahorro de energía de la zona móvil (Configuración → Red → Zona con cobertura inalámbrica móvil): con poca actividad Windows la apaga.
@@ -94,8 +102,8 @@ y solo para el programa de AgroScan (`AgroScan.exe` instalado, o el `java.exe` c
    la casa, la oficina o un café el puerto no existe. Con la Red Local apagada no hay ningún puerto abierto.
 2. **La red tiene contraseña WPA2** que cambia cada vez que se abre la app de escritorio y solo se muestra en su pantalla: para entrar hay
    que estar viendo la PC.
-3. **Firewall:** solo esa red, solo ese puerto, solo AgroScan (regla de arriba).
-4. **La app descarta** cualquier paquete cuyo origen no sea `192.168.137.x` (`TelemetryReceiver.isTrustedSource`).
+3. **Firewall:** solo esa red, solo esos puertos, solo AgroScan (reglas de arriba).
+4. **La app descarta** cualquier paquete cuyo origen no sea `192.168.137.x` (`LocalHotspot.isLocalNetwork`).
 5. **El protocolo no lleva órdenes.** La PC solo lee el texto y lo muestra: no ejecuta nada ni abre archivos. Lo peor que logra un paquete
    falso es mostrar datos falsos o basura (que se descarta al leerla: JSON inválido, demasiado anidado o con tipos equivocados). Un paquete
    que provocara un error inesperado se descarta sin apagar el receptor.
@@ -113,7 +121,54 @@ $u.Send($b, $b.Length, "192.168.137.1", 8765) | Out-Null
 ```
 (Enviar a `127.0.0.1` ya no llega: la app no escucha ahí.)
 
+## Registros de vuelo (HTTP, puerto 8766)
+El registro de cada salida (`salida-N.csv`, posición cada ~200 ms) y sus eventos (`salida-N.events.jsonl`, con las **marcas** que dicen
+qué segundo del video corresponde a cada posición) pasan a la PC, que los junta con el video de la microSD para extraer los cuadros.
+
+**Cuándo se envía**
+- **Automático** al cerrar cada salida, si el teléfono está conectado a la PC (`MissionRunner` → `FlightLogSync.sendInBackground`). En
+  segundo plano: nunca afecta al vuelo; si falla, queda pendiente.
+- **Botón "Enviar vuelos pendientes"** en Red Local → PC, para lo que se voló sin la PC cerca.
+- En los dos casos el teléfono primero pregunta qué salidas tiene la PC y envía **solo las que faltan**. No se marca nada en el teléfono:
+  un corte a mitad, otra PC o una carpeta borrada en la PC se resuelven solos al volver a enviar.
+
+**Peticiones** (por el Wi-Fi de la PC, `PcLink.network`; Android permite HTTP sin cifrar solo hacia `192.168.137.1`,
+ver `res/xml/network_security_config.xml`):
+
+`GET /salidas` → las salidas que la PC ya tiene:
+```json
+{"salidas":["7c9e6679-7425-40de-944b-e07fc1f90ae7"]}
+```
+
+`POST /salidas/<uuid de la salida>` → una salida con sus dos archivos (texto tal cual):
+```json
+{"v":1,
+ "salida":{"uuid":"7c9e6679-…","indice":1,"estado":"COMPLETADA","inicio_ms":1793022406491,"fin_ms":1793023306491,
+           "video_inicio_ms":1793022460000,"video_fin_ms":1793023250000},
+ "vuelo":{"uuid":"0f8fad5b-…","inicio_ms":1793022000000,"modo":"video"},
+ "mision":"Sector 1","lote":"Finca Sánchez",
+ "registro_csv":"t_ms,lat,lon,…\n…","eventos_jsonl":"{\"t_ms\":…,\"evento\":\"marca\",…}\n…"}
+```
+| Campo | Significado |
+|---|---|
+| `salida.uuid` | UUID de la salida; debe coincidir con el de la dirección |
+| `salida.indice` | Orden de la salida en el vuelo, desde 0 (la PC la guarda como `salida-<indice+1>`) |
+| `salida.video_inicio_ms`, `video_fin_ms` | Cuándo empezó y terminó de grabar (epoch UTC). La PC los usa para saber a qué salida pertenece cada video de la microSD. `null` en modo foto |
+| `vuelo.uuid`, `vuelo.inicio_ms`, `vuelo.modo` | Vuelo al que pertenece (todas sus salidas van a la misma carpeta) |
+| `mision`, `lote` | Nombres, para que la carpeta sea legible |
+| `registro_csv`, `eventos_jsonl` | Los dos archivos de la salida, sin cambios (formato en `docs/ESTRUCTURA_DE_DATOS.md`, sección 5) |
+
+Respuestas: `200 {"ok":true,"nuevo":true}` (guardada), `200 {"ok":true,"nuevo":false}` (ya estaba: la PC no la toca), o un error
+`4xx` con `{"error":"motivo"}`.
+
+**Dónde queda en la PC:** `Documentos\AgroScan\vuelos\<fecha>_<lote>_<misión>_<uuid8>\salida-N\` (la carpeta base se puede cambiar
+en Procesamiento). Ahí mismo el importador de la microSD copia los videos de esa salida (`video\`). Ver el README de AgroScan-Desktop.
+
+**Seguridad:** las mismas capas que la telemetría (puerto solo en la Red Local, Firewall estrecho, solo equipos `192.168.137.x`) y
+además: lo que llega solo se guarda como texto (nunca se ejecuta), los UUID se validan antes de usarlos en nombres de carpeta, cada
+salida se escribe **una sola vez** (un envío falso no pisa uno real) y el cuerpo tiene un máximo de 64 MB.
+
 ## Lo que NO hace
-- No manda video ni fotos (el video sale de la microSD).
+- No manda video ni fotos por Wi-Fi: el video sale de la microSD y la PC lo importa (Procesamiento → Importar desde la microSD).
 - No lleva órdenes de la PC al dron: el botón "ABORTAR (RTL)" de la PC no hace nada y cualquier orden tendría que diseñarse aparte (seguridad de vuelo).
-- No garantiza entrega: lo que importa del vuelo está en el registro de vuelo del teléfono (`docs/ESTRUCTURA_DE_DATOS.md`).
+- La telemetría en vivo no garantiza entrega; lo que importa del vuelo es el registro de vuelo, que sí se confirma (sección anterior).

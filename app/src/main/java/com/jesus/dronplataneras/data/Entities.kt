@@ -205,6 +205,26 @@ data class SalidaEntity(
 )
 
 /**
+ * Una salida cerrada con lo que la PC necesita para guardar su registro de vuelo en la carpeta correcta y emparejarla con
+ * su video de la microSD (lectura de [VueloDao.salidasParaEnviar], no es una tabla).
+ */
+data class SalidaParaEnviar(
+    val salidaUuid: String,
+    val indice: Int,
+    val estado: EstadoSalida,
+    val inicioMs: Long,
+    val finMs: Long?,
+    val videoInicioMs: Long?,
+    val videoFinMs: Long?,
+    val logPath: String?,
+    val vueloUuid: String,
+    val vueloInicioMs: Long,
+    val modoCaptura: CaptureMode,
+    val mision: String,
+    val lote: String
+)
+
+/**
  * Un vuelo con todas sus salidas.
  */
 data class VueloCompleto(

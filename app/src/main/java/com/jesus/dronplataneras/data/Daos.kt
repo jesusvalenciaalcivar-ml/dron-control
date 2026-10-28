@@ -165,4 +165,19 @@ abstract class VueloDao {
     /** Una salida que quedó EN_CURSO porque la app se cerró en pleno vuelo. */
     @Query("UPDATE salidas SET estado = 'INTERRUMPIDA', motivo = :motivo, finMs = :ahora WHERE estado = 'EN_CURSO'")
     abstract suspend fun cerrarSalidasHuerfanas(motivo: String, ahora: Long)
+
+    /** Salidas ya cerradas que tienen registro de vuelo, con su vuelo, misión y lote: lo que se puede enviar a la PC. */
+    @Query(
+        """
+        SELECT s.uuid AS salidaUuid, s.indice, s.estado, s.inicioMs, s.finMs, s.videoInicioMs, s.videoFinMs, s.logPath,
+               v.uuid AS vueloUuid, v.fechaInicio AS vueloInicioMs, v.modoCaptura, m.nombre AS mision, l.nombre AS lote
+        FROM salidas s
+        JOIN vuelos v ON v.id = s.vueloId
+        JOIN misiones m ON m.id = v.misionId
+        JOIN lotes l ON l.id = m.loteId
+        WHERE s.finMs IS NOT NULL AND s.logPath IS NOT NULL
+        ORDER BY s.inicioMs
+        """
+    )
+    abstract suspend fun salidasParaEnviar(): List<SalidaParaEnviar>
 }

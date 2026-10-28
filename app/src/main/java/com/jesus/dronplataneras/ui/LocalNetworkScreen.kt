@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Link
@@ -28,9 +29,14 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.jesus.dronplataneras.data.AgroRepository
+import com.jesus.dronplataneras.network.FlightLogSync
 import com.jesus.dronplataneras.network.PcLink
 import com.jesus.dronplataneras.sdk.AppStatus
 import com.jesus.dronplataneras.sdk.runOnMain
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private enum class NetworkTab(val label: String) { PC("Conectar a PC"), GALLERY("Galería del dron") }
 
@@ -108,6 +114,27 @@ fun LocalNetworkScreen(onBack: () -> Unit) {
                             if (PcLink.state.value == PcLink.State.CONNECTING) {
                                 AppStatus.message.value = "Android te pedirá confirmar: toca Conectar en su aviso"
                             }
+                        }
+                    }
+                    // Registros y marcas del video de las salidas que la PC todavía no tiene (las que se volaron sin la PC cerca)
+                    val scope = rememberCoroutineScope()
+                    var enviando by remember { mutableStateOf(false) }
+                    SecondaryButton(
+                        if (enviando) "Enviando…" else "Enviar vuelos pendientes", Icons.Filled.CloudUpload, Modifier.fillMaxWidth(),
+                        enabled = link == PcLink.State.CONNECTED && !enviando
+                    ) {
+                        enviando = true
+                        scope.launch {
+                            val r = withContext(Dispatchers.IO) { FlightLogSync.sendPending(AgroRepository.get(context)) }
+                            AppStatus.message.value = r.fold(
+                                { res ->
+                                    val sinArchivo = if (res.sinArchivo > 0) " (${res.sinArchivo} sin registro en el teléfono)" else ""
+                                    if (res.enviadas > 0) "Enviadas a la PC: ${res.enviadas} salida(s)$sinArchivo"
+                                    else "La PC ya tiene todos los vuelos$sinArchivo"
+                                },
+                                { "No se pudo enviar: ${it.message}" }
+                            )
+                            enviando = false
                         }
                     }
                     // ponytail: sin servidor en la PC (no hay puerto ni protocolo) el botón no envía nada todavía
