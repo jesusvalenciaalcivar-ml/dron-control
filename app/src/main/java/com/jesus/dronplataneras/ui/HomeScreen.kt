@@ -30,13 +30,13 @@ private data class SampleMission(val name: String, val date: String, val hectare
 
 
 /**
- * Pantalla de inicio: estado del dron, misiones recientes y accesos a conexión, mapas sin conexión y NTRIP.
+ * Pantalla de inicio: estado del dron, misiones recientes y accesos a conexión, mapas sin conexión y conexión con la PC.
  */
 @Composable
 fun HomeScreen(
     onEnterFlightScreen: () -> Unit,
     onConnect: () -> Unit,
-    onOpenNtrip: () -> Unit,
+    onOpenLocalNetwork: () -> Unit,
     onOpenMaps: () -> Unit = {},
     onSeeAllMissions: () -> Unit = {},
     onOpenMission: (misionId: Long) -> Unit = {}
@@ -59,13 +59,13 @@ fun HomeScreen(
         AppTopBar(
             center = {
                 OutlinedButton(
-                    onClick = onOpenNtrip,
+                    onClick = onOpenLocalNetwork,
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
                     modifier = Modifier.height(32.dp)
                 ) {
                     Icon(Icons.Filled.SettingsInputAntenna, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Estación NTRIP", style = MaterialTheme.typography.labelMedium)
+                    Text("Red local", style = MaterialTheme.typography.labelMedium)
                 }
             }
         ) { StatusPill(isConnected) }

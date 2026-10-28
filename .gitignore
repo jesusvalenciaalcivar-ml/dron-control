@@ -12,6 +12,7 @@
 /captures
 .externalNativeBuild
 .cxx
+.claude
 local.properties
 
 .idea/

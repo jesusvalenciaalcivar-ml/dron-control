@@ -24,6 +24,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import android.view.WindowManager
 import com.jesus.dronplataneras.data.AgroRepository
 import com.jesus.dronplataneras.flight.LandingGuard
+import com.jesus.dronplataneras.network.TelemetryStream
 import com.jesus.dronplataneras.sdk.AppStatus
 import com.jesus.dronplataneras.sdk.DJIConnectionManager
 import com.jesus.dronplataneras.map.MapConfig
@@ -42,9 +43,10 @@ import kotlinx.coroutines.launch
 /** Pantallas de la app. Las que llevan datos (ids de Room) son data class. */
 private sealed interface Route {
     data object Home : Route
-    data object Connect : Route
+    /** [autoStart]: empezar a buscar al entrar (reintento desde "Dron no detectado"). */
+    data class Connect(val autoStart: Boolean = false) : Route
     data object NotDetected : Route
-    data object Ntrip : Route
+    data object LocalNetwork : Route
     /** Vista de cámara a pantalla completa (vuelo manual + marcar vértices). */
     data object Camera : Route
     data object PolygonEditor : Route
@@ -116,21 +118,22 @@ class MainActivity : AppCompatActivity() {
                     when (screen) {
                         Route.Home -> HomeScreen(
                             onEnterFlightScreen = { newMission() },
-                            onConnect = { go(Route.Connect) },
-                            onOpenNtrip = { go(Route.Ntrip) },
+                            onConnect = { go(Route.Connect()) },
+                            onOpenLocalNetwork = { go(Route.LocalNetwork) },
                             onOpenMaps = { go(Route.OfflineMaps) },
                             onSeeAllMissions = { go(Route.SavedMissions) },
                             onOpenMission = { id -> go(Route.Verification(id)) }
                         )
-                        Route.Connect -> ConnectScreen(
+                        is Route.Connect -> ConnectScreen(
+                            autoStart = screen.autoStart,
                             onConnected = { home() },
                             onNotDetected = { replace(Route.NotDetected) }
                         )
                         Route.NotDetected -> NotDetectedScreen(
-                            onRetry = { replace(Route.Connect) },
+                            onRetry = { replace(Route.Connect(autoStart = true)) },
                             onHome = { home() }
                         )
-                        Route.Ntrip -> NtripScreen(onBack = { back() })
+                        Route.LocalNetwork -> LocalNetworkScreen(onBack = { back() })
                         Route.Camera -> MainScreen(
                             onBack = { back() },
                             // Intercambio estilo DJI Fly: cámara <-> mapa en el mismo lugar de la pila
@@ -180,6 +183,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
         registerApp()
+        // Envío de telemetría a la PC: queda esperando a que el Wi-Fi de la PC esté conectado; un fallo aquí no debe afectar al dron
+        runCatching { TelemetryStream.start(this) }.onFailure { Log.e("MyApp", "TelemetryStream falló", it) }
         // Después del registro DJI y protegido: un fallo de mapas nunca debe impedir la conexión al dron
         runCatching { MapConfig.init(this) }.onFailure { Log.e("MyApp", "MapConfig.init falló", it) }
     }

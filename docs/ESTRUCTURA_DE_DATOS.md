@@ -33,6 +33,7 @@ así que coinciden con la base real. El diagrama está en [DIAGRAMA_BD.md](DIAGR
 | Telemetría, estado de la misión, vértices en captura | Memoria (objetos Kotlin) | **no** | Pantallas en vivo |
 | Claves de DJI y Mapbox | `local.properties` → manifiesto | en compilación | Registro del SDK y mapa |
 | Video / fotos | microSD del dron | sí (en el dron) | Material para el ortomosaico |
+| Fotos / videos descargados | Teléfono: `Pictures/AgroScan` y `Movies/AgroScan` (MediaStore), solo si el operador los descarga desde la galería | sí | Copia en el teléfono / paso a la PC |
 
 ## 2. Base de datos local (Room)
 
@@ -260,20 +261,28 @@ Cada línea tiene `t_ms` y `evento`, más los campos propios del evento:
 | Evento | Campos | Cuándo |
 |---|---|---|
 | `inicio` | `waypoints`, `modo`, `altura_m` | Empieza la salida |
+| `rth_altura`, `rth_altura_error` | `altura_m`, `detalle` | Al empezar la salida se fija la altura de regreso a casa del dron (altura máxima de la ruta + 5 m, entre 20 y 500 m). `rth_altura_error` = el dron no la aceptó y conserva la que tenía (de fábrica, 100 m); la misión no se aborta |
 | `rumbo_a_waypoint` | `wp`, `tramo` | Empieza un tramo |
 | `waypoint_alcanzado` | `wp` | Llega a un waypoint |
 | `pausa`, `reanuda` | – | El operador pausa o reanuda |
 | `video_inicio`, `video_fin` | – | Marcas del video de esta salida |
-| `grabando`, `grabacion_detenida` | `tarjeta` | La cámara empezó o dejó de grabar (también si lo hizo sola) |
+| `marca` | `n`, `t_video_s`, `lat`, `lon`, `alt_m`, `velocidad_ms`, `wp`, `ruta_m` | Solo en modo video, grabando y en tramo de barrido: una al empezar cada pasada y luego una cada `foto_cada_m` metros recorridos (la separación entre cuadros del plan). `t_video_s` = segundos desde que la cámara empezó a grabar (puede diferir unas décimas del primer cuadro real); `ruta_m` = distancia acumulada de la ruta. Sirve para saber en qué punto del video está cada posición |
+| `grabando`, `grabacion_detenida` | `tarjeta` | La cámara empezó o dejó de grabar (también si lo hizo sola). `tarjeta` es el estado de la microSD **en ese instante** (`NORMAL`, `WRITING_SLOWLY`, `SLOW`, `FULL`, `INVALID_FILE_SYSTEM`…); una tarjeta lenta suele aparecer aquí como `WRITING_SLOWLY` justo antes de que se corte la grabación |
 | `foto_ok`, `foto_error` | `n` / `detalle` | Resultado de cada disparo. Un rechazo se reintenta a los 1,5 s; tras 5 rechazos seguidos se detiene la misión |
 | `foto_de_prueba_ok`, `foto_de_prueba_fallo` | `detalle` | Foto de prueba antes de despegar (el "OK" solo dice que la cámara aceptó la orden) |
 | `camara_error` | `paso`, `detalle` | Falló cambiar el modo, la resolución o el modo de disparo |
+| `camara_modo` | `pedido`, `antes`, `actual`, `ok` | Resultado de preparar la cámara antes de despegar: modo pedido (`video`/`foto`), el que tenía antes, el que tiene ahora y si coincide. Con `ok` = `true` el operador ve "Cámara cambiada a modo …" (o "ya estaba en …"); con `false`, el motivo del SDK |
 | `camara_modo_no_confirmado`, `camara_modo_sigue_incorrecto` | `modo_actual`, `error_app` | La cámara no pasó al modo pedido |
 | `autoridad` | `motivo` | Cambió quién controla el dron |
 | `fin` | `motivo`, `mensaje`, `wp` | Termina la salida (`motivo` es un `EndReason`) |
 
 `EndReason`: `COMPLETED`, `PILOT_STOP`, `RTH_REQUESTED`, `LOW_BATTERY`, `LINK_LOST`, `AUTHORITY_LOST`, `NO_GPS`, `STALE_POSITION`,
 `TAKEOFF_FAILED`, `VIRTUAL_STICK_FAILED`, `RECORDING_FAILED`, `GIMBAL_FAILED`, `CAMERA_FAILED`, `WRONG_DIRECTION`, `ERROR`.
+
+Notas de dos motivos de `fin` que se confundían al diagnosticar:
+
+- `TAKEOFF_FAILED`: el despegue automático no confirmó altura. Se considera terminado al superar **0,5 m** con el dron en el aire; si pasan 20 s sin lograrlo, el `mensaje` incluye la altura alcanzada ("El despegue no terminó a tiempo (altura 0.4 m)").
+- `RECORDING_FAILED` con "La cámara dejó de grabar por sí sola": el `mensaje` da el estado de la tarjeta **al detenerse la grabación**, no el de después (que puede haberse recuperado a "Lista"). Debe coincidir con el campo `tarjeta` del evento `grabacion_detenida`.
 
 ## 6. Archivos de intercambio
 
@@ -297,7 +306,9 @@ Se pierde al cerrar la app. Son objetos Kotlin con estado observable desde Compo
 | Objeto | Contiene | Lo escribe | Lo leen |
 |---|---|---|---|
 | `TelemetryData` (en `TelemetryManager`) | Batería, altitud, velocidad, posición, satélites, nivel GPS, home, modo de vuelo, calidad del enlace, estado del regreso a casa | Listeners del SDK | Todas las pantallas, pre-vuelo, ejecutor |
-| `DroneInfo` | Modelo, inclinación del gimbal, motores, rumbo, tarjeta microSD, modo de cámara, segundos de video y fotos libres | Listeners del SDK | Pre-vuelo, ejecutor, mapa |
+| `DroneInfo` | Modelo, inclinación del gimbal, motores, rumbo, tarjeta microSD, modo de cámara, segundos de video y fotos libres | Listeners del SDK | Pre-vuelo, ejecutor, mapa, marca "N" de la cámara (rumbo e inclinación del gimbal) |
+| `PcLink` | Estado del enlace con la PC (`DISCONNECTED`, `CONNECTING`, `CONNECTED`), la red Wi-Fi a la que se unió la app, la IP de la PC y (solo en memoria) la contraseña de la última conexión para reconectar a mitad de una misión | `PcLink` (al conectar, desconectar o perder la red) | Pantalla de red local, `TelemetryStream` |
+| `MediaGalleryManager.download` | Archivo que se está descargando de la microSD y su porcentaje (uno a la vez) | `MediaGalleryManager` | Galería del dron |
 | `DJIConnectionManager` | Conectado, volando, confirmación de aterrizaje pendiente | Listeners del SDK | Pantallas, ejecutor, `LandingGuard` |
 | `SurveySession` | Vértices en captura (lat, lon, altitud, satélites, nivel GPS, hora), lote en edición | Pantalla de cámara y editor de perímetro | Editor de perímetro |
 | `MissionExecutor.Status` | Fase, waypoint, distancias, progreso, grabando, tiempo, fotos tomadas/rechazadas, mensaje | Ejecutor | Pantalla de misión |
@@ -321,8 +332,10 @@ También se aceptan como variables de entorno.
 
 ## 10. Datos que quedan en el dron
 
-El **video** (o las fotos) se guarda en la microSD del dron; la app no lo descarga. El escritorio lo empareja con cada salida mediante las
-marcas de tiempo del CSV y `salidas.videoInicioMs` / `videoFinMs`. El video 4K a 30 fps exige una tarjeta U3/V30.
+El **video** (o las fotos) se guarda en la microSD del dron. La app no lo descarga sola: el operador puede bajar archivos sueltos al teléfono desde la
+galería (carpetas `Pictures/AgroScan` y `Movies/AgroScan`, solo con el dron en tierra). El escritorio lo empareja con cada salida mediante las
+marcas de tiempo del CSV y `salidas.videoInicioMs` / `videoFinMs`, y con los eventos `marca` para ubicar posiciones dentro del video. El video 4K a 30 fps exige una tarjeta U3/V30
+(FAT32 hasta 32 GB, exFAT por encima; si la cámara informa `INVALID_FILE_SYSTEM`, hay que formatearla en exFAT).
 
 ## 11. Quién escribe y quién lee cada dato
 
@@ -352,7 +365,9 @@ marcas de tiempo del CSV y `salidas.videoInicioMs` / `videoFinMs`. El video 4K a
 - Cada lote, misión, vuelo y salida tiene un **UUID**; los ids autoincrementales de Room no sirven entre dispositivos.
 - El móvil es la **fuente de verdad** (trabaja sin internet en campo): el escritorio duplica el historial.
 - Para georreferenciar el video: emparejar cada archivo de la microSD con una salida por `videoInicioMs`/`videoFinMs` y usar el CSV (`t_ms`) para la posición de cada cuadro.
-- Aún no hay protocolo de sincronización ni espejo en vivo; esos datos están preparados pero no se transmiten.
+- **Enlace físico (hecho):** la PC crea el Wi-Fi `AgroScan` (zona móvil de Windows, IP `192.168.137.1`) y la app se une a él con `PcLink`. El tráfico debe salir por `PcLink.network` (no hay internet en esa red).
+- **Telemetría en vivo (hecho):** el teléfono manda por UDP (puerto 8765) posición, batería, velocidad, estado de la misión y la ruta; la pantalla de Telemetría de la app de escritorio los muestra. Formato en [PROTOCOLO_PC.md](PROTOCOLO_PC.md). Es un reflejo: no guarda nada y un paquete perdido no se recupera; el registro de vuelo (CSV y eventos) sigue siendo la fuente de verdad.
+- **Pendiente:** no hay protocolo para el polígono (botón *Enviar Polígono a PC* deshabilitado), el historial ni el video. Esos datos están preparados pero no se envían.
 
 ## 14. Limitaciones conocidas
 
@@ -361,4 +376,6 @@ marcas de tiempo del CSV y `salidas.videoInicioMs` / `videoFinMs`. El video 4K a
 - **Borrado de lotes:** hoy la app no tiene forma de borrar un lote. Si se añade, hay que borrar también los `parametros_vuelo` de sus misiones (la clave foránea va de la misión a los parámetros, así que el borrado en cascada no los alcanza) y los CSV de sus vuelos.
 - **`fotosEstimadas`** guarda cuadros en video y fotos en foto; el nombre ya no es exacto.
 - **Lotes cóncavos:** el planificador solo avisa; la ruta puede salirse del lote y la verificación la bloquea si se aleja más de 10 m.
+- **Descarga al teléfono:** requiere Android 10 o más (MediaStore). Si la descarga queda incompleta se borra el archivo a medias; no hay reanudación.
+- **Marcas del video:** `t_video_s` parte de la orden de grabar, no del primer cuadro real; puede diferir unas décimas de segundo. Las marcas son por distancia en línea recta entre la última marca y la posición actual, no por distancia recorrida sobre la ruta.
 - **Registros privados:** el build `debug` no es depurable (`isDebuggable = false`), así que no se pueden leer los CSV con `adb run-as`.

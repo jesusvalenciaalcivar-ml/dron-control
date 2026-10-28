@@ -6,9 +6,11 @@ import androidx.compose.runtime.mutableStateOf
 import com.jesus.dronplataneras.data.AgroRepository
 import com.jesus.dronplataneras.data.MisionCompleta
 import com.jesus.dronplataneras.data.VueloCompleto
+import com.jesus.dronplataneras.data.perimetro
 import com.jesus.dronplataneras.data.salidasVoladas
 import com.jesus.dronplataneras.planning.DroneProfile
 import com.jesus.dronplataneras.sdk.AppStatus
+import com.jesus.dronplataneras.survey.LatLon
 import com.jesus.dronplataneras.telemetry.TelemetryManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,7 +47,9 @@ object MissionRunner {
         /** Metros de ruta que ya quedaron atrás antes de esta salida, y de toda la ruta. */
         val distanciaPreviaM: Double,
         val distanciaTotalM: Double,
-        val plan: WaypointPlan
+        val plan: WaypointPlan,
+        /** Contorno del lote, en orden de captura. */
+        val perimetro: List<LatLon> = emptyList()
     )
 
     val current = mutableStateOf<RunContext?>(null)
@@ -112,7 +116,8 @@ object MissionRunner {
             totalWaypoints = plan.waypoints.size,
             distanciaPreviaM = plan.lengthUpToM(sortie.from),
             distanciaTotalM = plan.lengthM(),
-            plan = plan
+            plan = plan,
+            perimetro = mision.lote.perimetro()
         )
         current.value = ctx
 

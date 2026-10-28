@@ -8,6 +8,7 @@ import com.jesus.dronplataneras.sdk.runOnMain
 import dji.sdk.keyvalue.key.FlightControllerKey
 import dji.v5.et.action
 import dji.v5.et.create
+import dji.v5.et.set
 
 /**
  * Órdenes de vuelo al dron (despegar, regresar a casa, aterrizar, quitar el mando automático).
@@ -43,6 +44,32 @@ object FlightActions {
             }
         )
     }
+
+    /**
+     * Altura de regreso a casa que corresponde a una ruta que vuela como máximo a [routeMaxAltitudeM]: la de la ruta más
+     * [RTH_MARGIN_M] m, sin bajar de [RTH_MIN_M] m (el mínimo que acepta el dron). Sin esto el dron sube a la altura de fábrica
+     * (100 m) en cada regreso.
+     */
+    fun returnHomeHeightFor(routeMaxAltitudeM: Double): Int =
+        Math.ceil(routeMaxAltitudeM + RTH_MARGIN_M).toInt().coerceIn(RTH_MIN_M, RTH_MAX_M)
+
+    /**
+     * Fija la altura a la que el dron regresa a casa. La guarda el dron (no la app) y la usan todos los regresos: el botón RTH,
+     * el final de la misión, la batería baja y las protecciones propias del dron (enlace perdido). [onResult] recibe null si
+     * quedó fijada, o el motivo del fallo (en ese caso queda la altura que tuviera el dron).
+     * shortcut: no se restaura al terminar; DJI Fly mostrará la última altura fijada. Restaurar si se vuela fuera de la app.
+     */
+    fun setReturnHomeHeight(meters: Int, onResult: (error: String?) -> Unit) {
+        FlightControllerKey.KeyGoHomeHeight.create().set(
+            meters,
+            onSuccess = { runOnMain { onResult(null) } },
+            onFailure = { error -> runOnMain { onResult(error.readable()) } }
+        )
+    }
+
+    private const val RTH_MARGIN_M = 5
+    private const val RTH_MIN_M = 20
+    private const val RTH_MAX_M = 500
 
     /**
      * Inicia el regreso a casa (RTH) del propio dron.

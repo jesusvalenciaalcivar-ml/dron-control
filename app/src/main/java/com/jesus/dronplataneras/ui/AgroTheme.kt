@@ -7,7 +7,7 @@ import androidx.compose.ui.text.font.FontFamily
  * Colores y tipografía compartidos por todas las pantallas de AgroScan .
  *
  * Hay dos verdes por herencia de las dos generaciones de pantallas: [AgroGreen] (conexión, inicio,
- * cámara, NTRIP) y [BrandGreen] (planificación, verificación, misión). Se conservan los dos para no
+ * cámara, red local) y [BrandGreen] (planificación, verificación, misión). Se conservan los dos para no
  * cambiar el aspecto de las pantallas existentes.
  */
 internal val AgroGreen = Color(0xFF1E8E5A)

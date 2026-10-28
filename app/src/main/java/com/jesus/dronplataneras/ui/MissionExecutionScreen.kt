@@ -60,6 +60,7 @@ import com.jesus.dronplataneras.mission.CaptureMode
 import com.jesus.dronplataneras.mission.MissionExecutor
 import com.jesus.dronplataneras.mission.MissionExecutor.Phase
 import com.jesus.dronplataneras.mission.MissionRunner
+import com.jesus.dronplataneras.telemetry.DroneInfo
 import com.jesus.dronplataneras.sdk.AppStatus
 import com.jesus.dronplataneras.sdk.DJIConnectionManager
 import com.jesus.dronplataneras.survey.LatLon
@@ -88,6 +89,8 @@ fun MissionExecutionScreen(perimetro: List<LatLon>, onClose: () -> Unit) {
     val flying by DJIConnectionManager.isFlying
     // false = mapa grande y cámara pequeña; true = cámara grande y mapa pequeño
     var cameraMain by rememberSaveable { mutableStateOf(false) }
+    val droneHeading by DroneInfo.heading
+    val gimbalPitch by DroneInfo.gimbalPitch
 
     val c = ctx
     val plan = c?.plan
@@ -322,11 +325,15 @@ fun MissionExecutionScreen(perimetro: List<LatLon>, onClose: () -> Unit) {
         }
 
         // ---- Ventana pequeña: la otra vista. Se arrastra a cualquier esquina; tocarla intercambia mapa y cámara
+        val thumbWidth = if (compact) 144.dp else 230.dp
+        val thumbHeight = if (compact) 81.dp else 130.dp
         DraggableThumbnail(
             containerWidth = maxWidth, containerHeight = maxHeight,
-            width = if (compact) 144.dp else 230.dp, height = if (compact) 81.dp else 130.dp,
+            width = thumbWidth, height = thumbHeight,
             margin = gutter, topInset = barHeight + gutter,
-            endInset = (if (compact) 190.dp else 270.dp) + gutter * 2   // deja libres los controles de vuelo
+            endInset = (if (compact) 190.dp else 270.dp) + gutter * 2,   // deja libres los controles de vuelo
+            // Con la cámara en la ventana pequeña: marca del norte sobre su borde, que se desliza al girar el dron (solo con gimbal a nadir)
+            overlay = { if (!cameraMain) NorthMarker(thumbWidth, thumbHeight, droneHeading, gimbalPitch, if (compact) 16.dp else 20.dp) }
         ) {
             if (cameraMain) {
                 AgroMap(layers = layers, modifier = Modifier.fillMaxSize(), fitKey = c?.vueloId, interactive = false)

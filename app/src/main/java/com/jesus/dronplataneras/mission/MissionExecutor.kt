@@ -9,6 +9,7 @@ import com.jesus.dronplataneras.sdk.AppStatus
 import com.jesus.dronplataneras.sdk.DJIConnectionManager
 import com.jesus.dronplataneras.sdk.detail
 import com.jesus.dronplataneras.sdk.readable
+import com.jesus.dronplataneras.sdk.runOnMain
 import com.jesus.dronplataneras.survey.LatLon
 import com.jesus.dronplataneras.survey.LocalFrame
 import com.jesus.dronplataneras.survey.XY
@@ -84,12 +85,15 @@ object MissionExecutor {
     private const val LOOP_MS = 100L                 // 10 Hz (DJI recomienda 5–25 Hz)
     private const val ARRIVAL_RADIUS_M = 1.5
     private const val ALTITUDE_TOLERANCE_M = 1.5
+    private const val TAKEOFF_DONE_ALT_M = 0.5           // el despegue automático del Mini 3 se estabiliza a ~0.9-1.0 m
     private const val MAX_VERTICAL_SPEED_MS = 2.0
     private const val DIRECTION_CHECK_MAX_DEG = 60.0
     /** Tras cambiar de waypoint el dron aún frena/gira: no se juzga la dirección hasta que se asiente. */
     private const val DIRECTION_SETTLE_MS = 3000L
     private const val STALE_POSITION_MS = 3000L
     private const val RECORDING_START_TIMEOUT_MS = 6000L
+    /** Separación de las marcas del video si el plan no trae una (m). */
+    private const val DEFAULT_MARK_SPACING_M = 1.0
     private const val GIMBAL_TOLERANCE_DEG = 5.0
     /** Fotos rechazadas seguidas tras las cuales no tiene sentido seguir volando la ruta. */
     private const val MAX_SHOT_FAILURES = 5
@@ -143,6 +147,8 @@ object MissionExecutor {
     @Volatile private var retryShotAtMs = 0L
     /** Último error del SDK al intentar cambiar el modo de la cámara (vacío si la orden fue aceptada). */
     @Volatile private var modeSetError = ""
+    /** Estado de la microSD en el instante en que la grabación se detuvo (después puede recuperarse y ocultar la causa). */
+    @Volatile private var sdStateAtStop = ""
 
     private var onFinished: ((Outcome) -> Unit)? = null
     private var captureMode = CaptureMode.VIDEO
@@ -179,6 +185,7 @@ object MissionExecutor {
         shotFailures = 0
         retryShotAtMs = 0L
         modeSetError = ""
+        sdStateAtStop = ""
         legType = "transito"
         targetIndex = 0
         val total = plan.lengthM()
@@ -255,7 +262,17 @@ object MissionExecutor {
         val videoMode = plan.captureMode == CaptureMode.VIDEO
         event("inicio", mapOf("waypoints" to wps.size, "modo" to plan.captureMode.json, "altura_m" to plan.altitudeM))
 
+        // El regreso a casa del dron sube a 100 m de fábrica (aves, batería, tiempo): se baja a la altura de la ruta + margen.
+        // Vale para todos los regresos (fin de misión, botón RTH, batería baja y protecciones del dron). Si falla no se aborta:
+        // queda la altura que tuviera el dron y se avisa.
+        val rthM = FlightActions.returnHomeHeightFor(wps.maxOf { it.altitudeM })
+        FlightActions.setReturnHomeHeight(rthM) { error ->
+            event(if (error == null) "rth_altura" else "rth_altura_error", mapOf("altura_m" to rthM, "detalle" to error))
+            if (error != null) update { copy(message = "No se pudo bajar la altura de regreso a casa a $rthM m (queda la del dron): $error") }
+        }
+
         // 0. Cámara y gimbal listos antes de despegar (modo, resolución, gimbal a nadir)
+        val modeBefore = DroneInfo.cameraMode.value
         prepareCamera(plan)
         update { copy(message = "Preparando la cámara") }
         if (!awaitCameraMode(plan.captureMode)) {
@@ -266,6 +283,7 @@ object MissionExecutor {
                 event("camara_modo_sigue_incorrecto", mapOf("modo_actual" to DroneInfo.cameraMode.value))
             }
         }
+        announceCameraMode(plan.captureMode, modeBefore)
         if (!videoMode) {
             // Una foto de prueba antes de gastar batería: si la cámara no puede disparar, se sabe aquí y con el motivo
             update { copy(message = "Probando la cámara (foto de prueba)") }
@@ -289,10 +307,12 @@ object MissionExecutor {
                 }
             }
             if (!ok) return hold(EndReason.TAKEOFF_FAILED, "No se pudo despegar")
-            // esperar a que el despegue automático termine (~1.2 m)
+            // esperar a que el despegue automático termine; el Mini 3 puede quedarse estable en ~0.9-1.0 m, por eso el umbral es bajo
             val t0 = System.currentTimeMillis()
-            while (!(DJIConnectionManager.isFlying.value && alt > 1.0)) {
-                if (System.currentTimeMillis() - t0 > 20_000) return hold(EndReason.TAKEOFF_FAILED, "El despegue no terminó a tiempo")
+            while (!(DJIConnectionManager.isFlying.value && alt > TAKEOFF_DONE_ALT_M)) {
+                if (System.currentTimeMillis() - t0 > 20_000) {
+                    return hold(EndReason.TAKEOFF_FAILED, "El despegue no terminó a tiempo (altura ${"%.1f".format(alt)} m)")
+                }
                 delay(200)
             }
             delay(1500)
@@ -324,6 +344,9 @@ object MissionExecutor {
         var lastPhotoPos: LatLon? = null
         var lastPhotoAt = 0L
         var surveyStarted = false
+        // Marcas internas del video (no se muestran al operador): una cada `photoEveryM` m de barrido, que es la separación entre cuadros del plan
+        val marker = DistanceMarker(plan.photoEveryM.takeIf { it > 0 } ?: DEFAULT_MARK_SPACING_M)
+        var markN = 0
         var directionBadSince = 0L
         var recordingDroppedSince = 0L
         var doneBefore = 0.0
@@ -337,6 +360,7 @@ object MissionExecutor {
                 else -> "giro"
             }
             val legStartedAt = System.currentTimeMillis()
+            marker.reset()
             event("rumbo_a_waypoint", mapOf("wp" to i, "tramo" to legType))
             update { copy(waypointIndex = i, message = "Waypoint ${i + 1} de ${wps.size}") }
             while (true) {
@@ -348,7 +372,7 @@ object MissionExecutor {
                     else if (System.currentTimeMillis() - recordingDroppedSince > RECORDING_DROP_MS) {
                         return hold(
                             EndReason.RECORDING_FAILED,
-                            "La cámara dejó de grabar por sí sola. Tarjeta: ${SdCard.read(DroneInfo.sdCardState.value, true).text}. " +
+                            "La cámara dejó de grabar por sí sola. Tarjeta: ${SdCard.read(sdStateAtStop.ifBlank { DroneInfo.sdCardState.value }, true).text}. " +
                                 "En 4K hace falta una microSD U3/V30"
                         )
                     }
@@ -402,6 +426,19 @@ object MissionExecutor {
                 }
 
                 val legDone = if (i > 0) (wps[i - 1].distanceTo(target) - dist).coerceAtLeast(0.0) else 0.0
+                if (videoMode && recording && target.surveyLeg && marker.due(here)) {
+                    event(
+                        "marca",
+                        mapOf(
+                            "n" to ++markN,
+                            "t_video_s" to recStartMs?.let { (System.currentTimeMillis() - it) / 1000.0 },
+                            "lat" to lat, "lon" to lon, "alt_m" to alt,
+                            "velocidad_ms" to hypot(velNorth, velEast),
+                            "wp" to i,
+                            "ruta_m" to doneBefore + legDone
+                        )
+                    )
+                }
                 update {
                     copy(distanceDoneM = doneBefore + legDone, elapsedS = (System.currentTimeMillis() - startedAt) / 1000)
                 }
@@ -634,6 +671,25 @@ object MissionExecutor {
     }
 
     /**
+     * Avisa con un mensaje breve en pantalla (y en el registro) en qué modo quedó la cámara: si la app lo cambió, si ya estaba
+     * en el pedido o si no se pudo cambiar (con el motivo del SDK). [before] es el modo que tenía antes de pedir el cambio.
+     */
+    private fun announceCameraMode(captureMode: CaptureMode, before: String) {
+        val video = captureMode == CaptureMode.VIDEO
+        val label = if (video) "VIDEO" else "FOTO"
+        val current = DroneInfo.cameraMode.value
+        val ok = current == (if (video) CameraMode.VIDEO_NORMAL else CameraMode.PHOTO_NORMAL).name
+        event("camara_modo", mapOf("pedido" to label.lowercase(), "antes" to before, "actual" to current, "ok" to ok))
+        val message = when {
+            !ok -> "No se pudo poner la cámara en modo $label (está en ${current.ifEmpty { "modo desconocido" }})" +
+                if (modeSetError.isNotEmpty()) ": $modeSetError" else ""
+            before == current -> "Cámara ya estaba en modo $label"
+            else -> "Cámara cambiada a modo $label"
+        }
+        runOnMain { AppStatus.message.value = message }
+    }
+
+    /**
      * Espera a que la cámara informe el modo pedido; reintenta la orden cada ~2 s. Si el SDK no
      * informa el modo no se puede verificar y se sigue (la foto de prueba lo comprueba en la práctica).
      */
@@ -811,6 +867,7 @@ object MissionExecutor {
         }
         km.listen(KeyTools.createKey(CameraKey.KeyIsRecording, ComponentIndexType.LEFT_OR_MAIN), this) { _, v ->
             val isRec = v ?: false
+            if (!isRec && recording) sdStateAtStop = DroneInfo.sdCardState.value
             if (isRec != recording) event(if (isRec) "grabando" else "grabacion_detenida", mapOf("tarjeta" to DroneInfo.sdCardState.value))
             recording = isRec
             update { copy(recording = isRec) }
