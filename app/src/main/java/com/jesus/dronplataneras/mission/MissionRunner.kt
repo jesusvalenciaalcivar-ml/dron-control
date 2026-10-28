@@ -3,6 +3,7 @@ package com.jesus.dronplataneras.mission
 import android.content.Context
 import android.util.Log
 import androidx.compose.runtime.mutableStateOf
+import com.jesus.dronplataneras.network.FlightLogSync
 import com.jesus.dronplataneras.data.AgroRepository
 import com.jesus.dronplataneras.data.MisionCompleta
 import com.jesus.dronplataneras.data.VueloCompleto
@@ -152,6 +153,8 @@ object MissionRunner {
                     siguienteWaypoint = next
                 )
             )
+            // Con la PC conectada, el registro y las marcas del video se le envían ya (en segundo plano; si falla, queda pendiente)
+            FlightLogSync.sendInBackground(repo)
         } catch (e: Exception) {
             // El vuelo ya terminó; si no se pudo guardar, al menos que el operador lo sepa
             Log.e(TAG, "No se pudo guardar el cierre de la salida", e)

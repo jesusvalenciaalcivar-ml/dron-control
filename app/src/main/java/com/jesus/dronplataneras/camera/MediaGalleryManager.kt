@@ -11,15 +11,22 @@ import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.provider.MediaStore
 import android.util.Log
+import android.view.Surface
 import androidx.compose.runtime.mutableStateOf
+import com.jesus.dronplataneras.sdk.detail
 import com.jesus.dronplataneras.sdk.readable
 import dji.sdk.keyvalue.value.camera.MediaFileType
 import dji.v5.common.callback.CommonCallbacks
 import dji.v5.common.error.IDJIError
 import dji.v5.manager.datacenter.MediaDataCenter
+import dji.v5.manager.datacenter.camera.StreamInfo
 import dji.v5.manager.datacenter.media.MediaFile
 import dji.v5.manager.datacenter.media.MediaFileDownloadListener
 import dji.v5.manager.datacenter.media.PullMediaFileListParam
+import dji.v5.manager.datacenter.media.VideoPlayState
+import dji.v5.manager.datacenter.media.VideoPlayStateListener
+import dji.v5.manager.interfaces.ICameraStreamManager
+import dji.v5.manager.interfaces.IMediaManager
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
 
@@ -76,8 +83,70 @@ object MediaGalleryManager {
 
     /** La galería ya no se usa: devuelve la cámara a su modo normal (si hay una descarga en curso, lo hace al terminar). */
     fun release() {
+        stopPlayback()
         inUse = false
         disableIfIdle()
+    }
+
+    /** Estado de la reproducción de un video de la tarjeta; posición y duración en segundos. */
+    class Playback(val state: VideoPlayState, val positionS: Double, val durationS: Double)
+
+    /** La reproducción en curso (null si no hay ninguna). Cada actualización la manda el dron. */
+    val playback = mutableStateOf<Playback?>(null)
+
+    /** Motivo del último fallo que el SDK avisó al reproducir (vacío si no hubo). */
+    val playbackError = mutableStateOf("")
+
+    private val playListener = VideoPlayStateListener { s ->
+        playback.value = Playback(s.state, s.playingPosition, s.totalDuration)
+    }
+
+    /**
+     * Reproduce [file] sobre [surface] **sin descargarlo**: el dron manda el video en baja resolución, como "ver en baja resolución"
+     * de DJI Fly. El original 4K se queda en la tarjeta (muchos teléfonos no pueden decodificarlo). Requiere que la galería esté
+     * activa ([loadMedia]) y que no haya una descarga en curso. El SDK no avisa los errores de arranque: si el estado no sale de
+     * "cargando", la pantalla lo detecta.
+     */
+    fun playOnSurface(file: MediaFile, surface: Surface, width: Int, height: Int) {
+        mediaManager.removeVideoPlayStateListener(playListener)
+        mediaManager.addVideoPlayStateListener(playListener)
+        playbackError.value = ""
+        playback.value = Playback(VideoPlayState.BUFFERING, 0.0, 0.0)
+        mediaManager.playVideoToSurface(
+            file, surface, width, height, ICameraStreamManager.ScaleType.CENTER_INSIDE,
+            object : IMediaManager.MediaFrameListener {
+                // El SDK ya dibuja en la superficie: los cuadros no se usan
+                override fun onReceiveStream(data: ByteArray, width: Int, height: Int, info: StreamInfo) {}
+
+                // Aquí sí avisa el SDK cuando la reproducción falla; la pantalla lo muestra como "cargando" que no avanza
+                override fun onError(error: IDJIError) {
+                    Log.w(TAG, "Reproducción: ${error.readable()}")
+                    playbackError.value = error.detail()
+                }
+            }
+        )
+    }
+
+    fun pausePlayback() = mediaManager.pauseVideo(logFailure("pausar"))
+
+    fun resumePlayback() = mediaManager.resumeVideo(logFailure("reanudar"))
+
+    /** Salta a [seconds] segundos del video. */
+    fun seekPlayback(seconds: Int) = mediaManager.seekVideo(seconds, logFailure("saltar"))
+
+    /** Detiene la reproducción y la libera (se puede llamar sin que haya ninguna). */
+    fun stopPlayback() {
+        if (playback.value == null) return
+        playback.value = null
+        mediaManager.stopVideo(logFailure("detener"))
+        mediaManager.removeVideoPlayStateListener(playListener)
+    }
+
+    private fun logFailure(what: String) = object : CommonCallbacks.CompletionCallback {
+        override fun onSuccess() {}
+        override fun onFailure(error: IDJIError) {
+            Log.w(TAG, "No se pudo $what el video: ${error.readable()}")
+        }
     }
 
     private fun disableIfIdle() {

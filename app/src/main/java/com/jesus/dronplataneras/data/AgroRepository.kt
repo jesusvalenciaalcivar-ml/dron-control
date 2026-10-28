@@ -208,6 +208,9 @@ class AgroRepository private constructor(private val db: AgroDatabase) {
         }
     }
 
+    /** Salidas cerradas con registro de vuelo, para enviarlas a la PC (ver network/FlightLogSync). */
+    suspend fun salidasParaEnviar() = vuelos.salidasParaEnviar()
+
     /** Si la app se cerró en pleno vuelo, la salida quedó EN_CURSO para siempre: se marca interrumpida. */
     suspend fun cerrarSalidasHuerfanas() =
         vuelos.cerrarSalidasHuerfanas("La app se cerró durante la salida", System.currentTimeMillis())

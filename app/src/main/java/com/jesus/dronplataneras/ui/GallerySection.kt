@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -148,14 +149,48 @@ private fun MediaPreviewDialog(file: MediaFile, onDismiss: () -> Unit) {
         MediaGalleryManager.loadPreview(file) { bitmap -> if (bitmap != null) preview = bitmap }
     }
 
+    val video = MediaGalleryManager.isVideo(file)
+    var playing by remember(file) { mutableStateOf(false) }
+    // Ver el video usa el gestor de archivos del dron igual que una descarga: no se hacen a la vez
+    val downloading = MediaGalleryManager.download.value != null
+
     Dialog(onDismissRequest = onDismiss) {
-        Box(
-            modifier = Modifier.fillMaxWidth().aspectRatio(1f).background(Color.Black).clickable(onClick = onDismiss),
-            contentAlignment = Alignment.Center
-        ) {
-            preview?.let {
-                Image(it.asImageBitmap(), contentDescription = file.fileName, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-            } ?: CircularProgressIndicator(color = Color.White)
+        if (playing) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color.Black)) {
+                DroneVideoPlayer(file)
+                Text(
+                    "Vista en baja resolución desde la tarjeta del dron: no se descargó nada y el original 4K sigue intacto.",
+                    color = Color.White, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 12.dp)
+                )
+                TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) { Text("Cerrar", color = Color.White) }
+            }
+        } else {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color.Black)) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().aspectRatio(1f).clickable(onClick = onDismiss),
+                    contentAlignment = Alignment.Center
+                ) {
+                    preview?.let {
+                        Image(it.asImageBitmap(), contentDescription = file.fileName, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                    } ?: CircularProgressIndicator(color = Color.White)
+                    if (video) {
+                        IconButton(
+                            onClick = { playing = true },
+                            enabled = !downloading,
+                            modifier = Modifier.size(64.dp).clip(CircleShape).background(Color(0xAA000000))
+                        ) {
+                            Icon(Icons.Filled.PlayArrow, contentDescription = "Ver video en baja resolución", tint = Color.White, modifier = Modifier.size(40.dp))
+                        }
+                    }
+                }
+                if (video) {
+                    Text(
+                        if (downloading) "Hay una descarga en curso: espera a que termine para ver el video."
+                        else "Toca ▶ para verlo en baja resolución, sin descargarlo.",
+                        color = Color.White, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(12.dp)
+                    )
+                }
+            }
         }
     }
 }

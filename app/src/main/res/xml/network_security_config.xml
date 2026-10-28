@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android bloquea HTTP sin cifrar. La única excepción es la PC en su Wi-Fi AgroScan (zona móvil de Windows, IP fija
+  192.168.137.1): ahí van los registros de vuelo (network/FlightLogSync), en una red local sin internet y con contraseña WPA2.
+  Todo lo demás (DJI, Mapbox) sigue exigiendo HTTPS.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">192.168.137.1</domain>
+    </domain-config>
+</network-security-config>
