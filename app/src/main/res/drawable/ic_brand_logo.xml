@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- El mismo dron hoja, recortado al logo (sin fondo) para las barras superiores. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="128dp"
+    android:height="128dp"
+    android:viewportWidth="128"
+    android:viewportHeight="128">
+    <group android:translateX="-47.5" android:translateY="-47.5">
+        <path android:pathData="M73.1,73.1L149.9,149.9M149.9,73.1L73.1,149.9" android:strokeColor="#1B7A57" android:strokeWidth="7" />
+        <group android:rotation="-45" android:pivotX="112.75" android:pivotY="110.25">
+        <path android:fillColor="#10B981" android:pathData="M82.25,110.25A38.35,38.35 0 0 1 143.25,110.25A38.35,38.35 0 0 1 82.25,110.25z" android:strokeColor="#1B7A57" android:strokeWidth="4.8" android:strokeLineJoin="round" />
+        <path android:pathData="M86.75,110.25L138.75,110.25" android:strokeColor="#1B7A57" android:strokeWidth="4.2" android:strokeLineCap="round" />
+        </group>
+        <path android:fillColor="#FFFFFF" android:pathData="M53.05,73.1a20.05,20.05 0 1,0 40.1,0a20.05,20.05 0 1,0 -40.1,0zM129.85,73.1a20.05,20.05 0 1,0 40.1,0a20.05,20.05 0 1,0 -40.1,0zM53.05,149.9a20.05,20.05 0 1,0 40.1,0a20.05,20.05 0 1,0 -40.1,0zM129.85,149.9a20.05,20.05 0 1,0 40.1,0a20.05,20.05 0 1,0 -40.1,0z" android:strokeColor="#1B7A57" android:strokeWidth="6.1" />
+        <path android:fillColor="#1B7A57" android:pathData="M67.2,73.1a5.9,5.9 0 1,0 11.8,0a5.9,5.9 0 1,0 -11.8,0zM144,73.1a5.9,5.9 0 1,0 11.8,0a5.9,5.9 0 1,0 -11.8,0zM67.2,149.9a5.9,5.9 0 1,0 11.8,0a5.9,5.9 0 1,0 -11.8,0zM144,149.9a5.9,5.9 0 1,0 11.8,0a5.9,5.9 0 1,0 -11.8,0z" />
+    </group>
+</vector>

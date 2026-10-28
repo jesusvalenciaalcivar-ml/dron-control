@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,7 +30,7 @@ import kotlin.math.roundToInt
  * Ventana pequeña (cámara o mapa) que el operador puede arrastrar a cualquier esquina de la pantalla. Empieza abajo a la
  * izquierda y no sale de ([containerWidth] x [containerHeight]); [topInset] y [endInset] dejan libres la franja de arriba
  * (barra o telemetría) y la de la derecha (botones), para que la ventana nunca los tape.
- * Un toque sigue llegando al [content], así que sirve para intercambiar vistas. La posición sobrevive a rotaciones.
+ * Un toque sigue llegando al [content], así que sirve para intercambiar vistas. [overlay] se dibuja encima y sin recorte (puede salirse del marco). La posición sobrevive a rotaciones.
  */
 @Composable
 internal fun DraggableThumbnail(
@@ -41,6 +42,7 @@ internal fun DraggableThumbnail(
     margin: Dp = 12.dp,
     topInset: Dp = 0.dp,
     endInset: Dp = margin,
+    overlay: @Composable BoxScope.() -> Unit = {},
     content: @Composable BoxScope.() -> Unit
 ) {
     val density = LocalDensity.current
@@ -60,17 +62,19 @@ internal fun DraggableThumbnail(
         modifier
             .offset { IntOffset(shownX.roundToInt(), shownY.roundToInt()) }
             .size(width, height)
-            .shadow(8.dp, shape)
-            .clip(shape)
-            .background(Color.Black)
-            .border(2.dp, Color.White, shape)
             .pointerInput(minX, maxX, minY, maxY) {
                 detectDragGestures { change, drag: Offset ->
                     change.consume()
                     x = ((if (x.isNaN()) minX else x) + drag.x).coerceIn(minX, maxX)
                     y = ((if (y.isNaN()) maxY else y) + drag.y).coerceIn(minY, maxY)
                 }
-            },
-        content = content
-    )
+            }
+    ) {
+        Box(
+            Modifier.fillMaxSize().shadow(8.dp, shape).clip(shape).background(Color.Black).border(2.dp, Color.White, shape),
+            content = content
+        )
+        // Va fuera del recorte del marco: sirve para marcas que se apoyan en el borde
+        overlay()
+    }
 }

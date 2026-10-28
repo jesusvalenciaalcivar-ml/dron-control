@@ -31,15 +31,18 @@ private val ScreenBg = Color(0xFFF3F4F5)
 private const val SEARCH_TIMEOUT_MS = 10_000L
 
 /**
- * Pantalla que espera la conexión del dron: avanza sola al conectar y pasa a [NotDetectedScreen] a los 10 s sin señal.
+ * Pantalla para conectar el dron. No busca nada hasta que el operador pulsa "Iniciar Sincronización" (o entra con [autoStart],
+ * que es el reintento desde [NotDetectedScreen]); ya buscando, avanza sola al conectar y pasa a [NotDetectedScreen] a los 10 s sin señal.
  */
 @Composable
-fun ConnectScreen(onConnected: () -> Unit, onNotDetected: () -> Unit) {
+fun ConnectScreen(onConnected: () -> Unit, onNotDetected: () -> Unit, autoStart: Boolean = false) {
     val isConnected by DJIConnectionManager.isConnected
-    var attempt by remember { mutableIntStateOf(0) }
+    var attempt by remember { mutableIntStateOf(if (autoStart) 1 else 0) }   // 0 = sin buscar todavía
+    val searching = attempt > 0
 
-    LaunchedEffect(isConnected) { if (isConnected) onConnected() }
+    LaunchedEffect(attempt, isConnected) { if (searching && isConnected) onConnected() }
     LaunchedEffect(attempt) {
+        if (!searching) return@LaunchedEffect
         delay(SEARCH_TIMEOUT_MS)
         if (!DJIConnectionManager.isConnected.value) onNotDetected()
     }
@@ -84,10 +87,14 @@ fun ConnectScreen(onConnected: () -> Unit, onNotDetected: () -> Unit) {
                         ).forEachIndexed { i, step -> StepRow(i + 1, step, Modifier.weight(1f)) }
                     }
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = AgroGreen)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Buscando aeronave...", style = MaterialTheme.typography.bodySmall)
+                    if (searching) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = AgroGreen)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Buscando aeronave...", style = MaterialTheme.typography.bodySmall)
+                        }
+                    } else {
+                        Text("Pulsa Iniciar Sincronización para buscar la aeronave.", style = MaterialTheme.typography.bodySmall)
                     }
 
                     Button(
