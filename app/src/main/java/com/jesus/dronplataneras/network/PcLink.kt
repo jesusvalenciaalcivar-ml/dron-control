@@ -61,10 +61,12 @@ object PcLink {
             watchLoss(context.applicationContext, joined)
             network = joined
             state.value = State.CONNECTED
+            LinkLog.log("wifi", "Conectado a la PC $pcHost (el teléfono ya estaba en su Wi-Fi, unido desde Ajustes)")
             return
         }
-        if (!isValidPassword(password)) return onError(INVALID_PASSWORD)
+        if (!isValidPassword(password)) return onError(INVALID_PASSWORD).also { LinkLog.log("wifi", "No se conectó: contraseña no válida") }
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return onError("En este Android hay que unirse al Wi-Fi AgroScan desde Ajustes")
+        LinkLog.log("wifi", "Pidiendo a Android el Wi-Fi $WIFI_SSID de la PC $pcHost")
         requestWifi(context.applicationContext, pc, password, onError)
     }
 
@@ -74,7 +76,20 @@ object PcLink {
      */
     fun reconnect(context: Context) {
         val host = pcHost ?: return
-        if (state.value == State.DISCONNECTED) connect(context, host, lastPassword.orEmpty()) {}
+        if (state.value != State.DISCONNECTED) return
+        LinkLog.log("wifi", "Reintentando la conexión con la PC")
+        connect(context, host, lastPassword.orEmpty()) { LinkLog.log("wifi", "El reintento falló: $it") }
+    }
+
+    /**
+     * ¿Toca volver a pedir el Wi-Fi de la PC? En misión siempre, cada 10 s. Fuera de misión cada 30 s pero solo los primeros 5 min
+     * después de perderlo: más tarde lo normal es que la PC esté apagada y Android molestaría con su aviso para nada.
+     * [lostAt] es cuándo se perdió (0 si nunca hubo conexión). Función pura.
+     */
+    fun shouldReconnect(now: Long, lostAt: Long, lastAttemptAt: Long, inMission: Boolean): Boolean = when {
+        inMission -> now - lastAttemptAt >= 10_000
+        lostAt == 0L -> false
+        else -> now - lostAt <= 5 * 60_000 && now - lastAttemptAt >= 30_000
     }
 
     /** Suelta la conexión con la PC (Android vuelve a la red anterior del teléfono). */
@@ -95,6 +110,7 @@ object PcLink {
                 val (ip, prefix) = ipv4Of(linkProperties) ?: return
                 if (sameSubnet(ip, pc, prefix)) {
                     this@PcLink.network = network
+                    if (state.value != State.CONNECTED) LinkLog.log("wifi", "Conectado al Wi-Fi de la PC (IP del teléfono ${linkProperties.linkAddresses.firstOrNull { it.address is Inet4Address }?.address?.hostAddress})")
                     state.value = State.CONNECTED
                 } else {
                     fail(context, onError, "El Wi-Fi AgroScan no está en la subred de la PC ($pc): revisa la IP de la PC")
@@ -104,6 +120,7 @@ object PcLink {
             override fun onUnavailable() = fail(context, onError, "No se pudo unir al Wi-Fi AgroScan: revisa la contraseña y que la red de la PC esté encendida")
 
             override fun onLost(network: Network) {
+                LinkLog.log("wifi", "SE PERDIÓ el Wi-Fi de la PC")
                 this@PcLink.network = null
                 state.value = State.DISCONNECTED
             }
@@ -129,6 +146,7 @@ object PcLink {
         val cb = object : ConnectivityManager.NetworkCallback() {
             override fun onLost(lost: Network) {
                 if (lost != joined) return
+                LinkLog.log("wifi", "SE PERDIÓ el Wi-Fi de la PC (al que se unió desde Ajustes)")
                 this@PcLink.network = null
                 state.value = State.DISCONNECTED
             }
@@ -146,6 +164,7 @@ object PcLink {
     }
 
     private fun fail(context: Context, onError: (String) -> Unit, message: String) {
+        LinkLog.log("wifi", "No se pudo conectar: $message")
         disconnect(context)
         onError(message)
     }

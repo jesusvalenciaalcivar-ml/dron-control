@@ -4,6 +4,7 @@ import android.util.Log
 import com.jesus.dronplataneras.sdk.detail
 import com.jesus.dronplataneras.sdk.readable
 import dji.sdk.keyvalue.key.CameraKey
+import dji.sdk.keyvalue.key.GimbalKey
 import dji.sdk.keyvalue.value.camera.CameraFlatMode
 import dji.sdk.keyvalue.value.camera.CameraMode
 import dji.sdk.keyvalue.value.camera.CameraShootPhotoMode
@@ -11,6 +12,8 @@ import dji.sdk.keyvalue.value.camera.VideoFrameRate
 import dji.sdk.keyvalue.value.camera.VideoResolution
 import dji.sdk.keyvalue.value.camera.VideoResolutionFrameRate
 import dji.sdk.keyvalue.value.common.ComponentIndexType
+import dji.sdk.keyvalue.value.gimbal.GimbalAngleRotation
+import dji.sdk.keyvalue.value.gimbal.GimbalAngleRotationMode
 import dji.v5.et.action
 import dji.v5.et.create
 import dji.v5.et.set
@@ -69,6 +72,21 @@ object CameraControl {
                 }
             )
         }
+    }
+
+    /**
+     * Gira el gimbal a [pitchDeg] grados (-90 = cámara mirando al suelo). Solo manda la orden: a dónde llegó se lee en
+     * `DroneInfo.gimbalPitch`. [onError] recibe el motivo si el dron la rechaza.
+     */
+    fun rotateGimbal(pitchDeg: Double, onError: (String) -> Unit = {}) {
+        GimbalKey.KeyRotateByAngle.create(cam).action(
+            GimbalAngleRotation(GimbalAngleRotationMode.ABSOLUTE_ANGLE, pitchDeg, 0.0, 0.0, false, true, true, 1.0, false, 0),
+            onSuccess = {},
+            onFailure = { e ->
+                Log.w(TAG, "Gimbal: ${e.readable()}")
+                onError(e.detail())
+            }
+        )
     }
 
     /** Pide una foto. [onResult] recibe null si la cámara aceptó la orden o el motivo del rechazo (no prueba que se guardara). */

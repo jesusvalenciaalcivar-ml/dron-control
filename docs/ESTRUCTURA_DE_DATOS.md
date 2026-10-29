@@ -368,7 +368,7 @@ marcas de tiempo del CSV y `salidas.videoInicioMs` / `videoFinMs`, y con los eve
 - **Enlace físico (hecho):** la PC crea el Wi-Fi `AgroScan` (zona móvil de Windows, IP `192.168.137.1`) y la app se une a él con `PcLink`. El tráfico debe salir por `PcLink.network` (no hay internet en esa red).
 - **Telemetría en vivo (hecho):** el teléfono manda por UDP (puerto 8765) posición, batería, velocidad, estado de la misión y la ruta; la pantalla de Telemetría de la app de escritorio los muestra. Formato en [PROTOCOLO_PC.md](PROTOCOLO_PC.md). Es un reflejo: no guarda nada y un paquete perdido no se recupera; el registro de vuelo (CSV y eventos) sigue siendo la fuente de verdad.
 - **Registros de vuelo (hecho):** al cerrar cada salida (y con el botón *Enviar vuelos pendientes*) el teléfono manda por HTTP (puerto 8766) el CSV y los eventos con las marcas del video de cada salida que la PC no tenga, junto con `videoInicioMs`/`videoFinMs` para emparejar el video. Lo hace `network/FlightLogSync`; la lectura es `VueloDao.salidasParaEnviar`. Formato en [PROTOCOLO_PC.md](PROTOCOLO_PC.md). El video sigue saliendo de la microSD: la PC lo importa y lo deja en la carpeta de la salida.
-- **Pendiente:** no hay protocolo para el polígono (botón *Enviar Polígono a PC* sin función) ni para el historial completo (lotes y misiones).
+- **Pendiente:** no hay protocolo para el polígono (botón *Enviar Polígono a PC* sin función) ni para el historial completo (lotes, misiones, vuelos y salidas a la base PostgreSQL de la PC). Cómo sería (`POST /sync`, de Room a PostgreSQL tabla por tabla, por UUID): `docs/BASE_DE_DATOS.md` del proyecto AgroScan-Desktop.
 
 ## 14. Limitaciones conocidas
 

@@ -7,6 +7,8 @@ data class TelemetryData(
     val batteryPercent: Int = 0,
     val altitude: Double=0.0,
     val speed: Double = 0.0,
+    /** Hacia dónde se mueve el dron (grados brújula, 0 = norte); NaN si está casi quieto. No es la nariz: con rumbo fijo vuela de costado o hacia atrás. */
+    val course: Double = Double.NaN,
     val latitude: Double = 0.0,
     val longitude: Double = 0.0,
     val gpsSatelliteCount: Int = 0,

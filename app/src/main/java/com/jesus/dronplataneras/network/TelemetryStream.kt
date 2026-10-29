@@ -1,7 +1,10 @@
 package com.jesus.dronplataneras.network
 
 import android.content.Context
+import android.net.ConnectivityManager
 import android.net.Network
+import android.net.NetworkCapabilities
+import android.os.Build
 import android.util.Log
 import com.jesus.dronplataneras.mission.MissionExecutor
 import com.jesus.dronplataneras.mission.MissionRunner
@@ -32,9 +35,16 @@ object TelemetryStream {
     private const val TAG = "TelemetryStream"
     private const val EVERY_MS = 500L
     private const val PLAN_EVERY_MS = 5_000L
-    private const val RECONNECT_EVERY_MS = 10_000L
 
     private var job: Job? = null
+
+    /**
+     * En qué paso de preparar la misión está el operador (`perimetro`, `planificacion`, `verificacion`), o null fuera de esos
+     * pasos. Lo fija la navegación (MainActivity). La PC lo usa para avisar "Generando la ruta…" antes de que llegue el `plan`,
+     * que solo se envía al iniciar la salida.
+     */
+    @Volatile
+    var etapa: String? = null
 
     /** Empieza a enviar mientras [PcLink] esté conectado. Se llama una vez al abrir la app; llamarla de nuevo no hace nada. */
     fun start(context: Context) {
@@ -49,12 +59,19 @@ object TelemetryStream {
         var seq = 0
         var lastPlanAt = 0L
         var lastReconnectAt = 0L
+        var lostAt = 0L
+        var wasConnected = false
+        val stats = MinuteStats()
         while (isActive) {
             delay(EVERY_MS)
             val now = System.currentTimeMillis()
-            if (PcLink.state.value != PcLink.State.CONNECTED) {
-                // Con la misión en curso y el Wi-Fi caído se vuelve a pedir; fuera de misión no, para no molestar con el aviso de Android
-                if (MissionExecutor.status.value.running && now - lastReconnectAt >= RECONNECT_EVERY_MS) {
+            val connected = PcLink.state.value == PcLink.State.CONNECTED
+            if (wasConnected && !connected) lostAt = now
+            wasConnected = connected
+            stats.maybeLog(now, connected, context)
+            if (!connected) {
+                // Se vuelve a pedir el Wi-Fi caído (ver PcLink.shouldReconnect: en misión siempre, fuera de ella un rato)
+                if (PcLink.shouldReconnect(now, lostAt, lastReconnectAt, MissionExecutor.status.value.running)) {
                     lastReconnectAt = now
                     PcLink.reconnect(context)
                 }
@@ -71,6 +88,7 @@ object TelemetryStream {
                 }
                 val address = InetAddress.getByName(host)   // IP numérica ya validada: no hay consulta DNS
                 send(socket, address, TelemetryPacket.telemetry(sample(seq++, now)))
+                stats.sent++
                 if (now - lastPlanAt >= PLAN_EVERY_MS) {
                     lastPlanAt = now
                     MissionRunner.current.value?.let { c ->
@@ -80,9 +98,43 @@ object TelemetryStream {
                 }
             } catch (e: IOException) {
                 Log.w(TAG, "No se pudo enviar: ${e.message}")
+                if (stats.errors++ == 0) LinkLog.log("telemetria", "No se pudo enviar a la PC: ${e.message}")
                 socket?.close()
                 socket = null
             }
+        }
+    }
+
+    /** Resumen por minuto para el registro: cuánto se envió, cuántos errores, la señal del Wi-Fi y en qué estaba el dron. */
+    private class MinuteStats {
+        var sent = 0
+        var errors = 0
+        private var start = 0L
+
+        fun maybeLog(now: Long, connected: Boolean, context: Context) {
+            if (start == 0L) start = now
+            if (now - start < 60_000) return
+            if (sent > 0 || errors > 0 || connected) {
+                val t = TelemetryManager.telemetry.value
+                val s = MissionExecutor.status.value
+                LinkLog.log(
+                    "telemetria",
+                    "Último minuto: $sent paquetes enviados, $errors errores · Wi-Fi ${if (connected) "conectado, ${wifiSignal(context)}" else "DESCONECTADO"} · " +
+                        "fase ${s.phase.name}, ${if (DJIConnectionManager.isConnected.value) "dron conectado" else "dron SIN conectar"}, " +
+                        "batería ${t.batteryPercent} %, altura ${"%.0f".format(t.altitude)} m"
+                )
+            }
+            start = now
+            sent = 0
+            errors = 0
+        }
+
+        /** Intensidad de la señal del Wi-Fi de la PC (dBm; cuanto más cerca de 0, mejor: -50 muy buena, -80 mala). */
+        private fun wifiSignal(context: Context): String {
+            val network = PcLink.network ?: return "señal desconocida"
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return "señal desconocida"
+            val dbm = context.getSystemService(ConnectivityManager::class.java).getNetworkCapabilities(network)?.signalStrength
+            return if (dbm == null || dbm == NetworkCapabilities.SIGNAL_STRENGTH_UNSPECIFIED) "señal desconocida" else "señal $dbm dBm"
         }
     }
 
@@ -101,12 +153,17 @@ object TelemetryStream {
             tMs = tMs, seq = seq,
             lat = t.latitude.takeIf { hasFix }, lon = t.longitude.takeIf { hasFix },
             altM = t.altitude, velMs = t.speed, rumbo = DroneInfo.heading.value.takeUnless { it.isNaN() },
+            curso = t.course.takeUnless { it.isNaN() },
             bat = t.batteryPercent, sat = t.gpsSatelliteCount, enlace = t.signalQuality,
             fase = s.phase.name, volando = DJIConnectionManager.isFlying.value,
             wp = (c?.waypointOffset ?: 0) + s.waypointIndex, wpTotal = c?.totalWaypoints ?: s.waypointCount,
             avance = if (c != null && c.distanciaTotalM > 0) (doneM / c.distanciaTotalM).coerceIn(0.0, 1.0) else s.progress,
             distM = doneM, grabando = s.recording, fotos = s.photos, tVueloS = s.elapsedS,
-            dron = DJIConnectionManager.isConnected.value
+            // Lo mismo que muestra la pantalla de misión del teléfono en modo video
+            tRecS = s.recordingS,
+            cuadros = if (c != null && c.plan.photoEveryM > 0) (doneM / c.plan.photoEveryM).toInt() else 0,
+            dron = DJIConnectionManager.isConnected.value,
+            etapa = etapa
         )
     }
 

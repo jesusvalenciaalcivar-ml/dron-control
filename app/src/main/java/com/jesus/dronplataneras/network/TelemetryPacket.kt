@@ -12,6 +12,8 @@ data class TelemetrySample(
     val altM: Double,
     val velMs: Double,
     val rumbo: Double?,
+    /** Hacia dónde se mueve (grados brújula); null si está casi quieto. */
+    val curso: Double? = null,
     val bat: Int,
     val sat: Int,
     val enlace: Int,
@@ -24,8 +26,14 @@ data class TelemetrySample(
     val grabando: Boolean,
     val fotos: Int,
     val tVueloS: Long,
+    /** Segundos que lleva grabando el video de esta salida (0 si no graba). */
+    val tRecS: Int = 0,
+    /** Cuadros del video que salen de lo recorrido (recorrido / separación entre cuadros), como en la pantalla de misión. */
+    val cuadros: Int = 0,
     /** El teléfono está conectado al dron. Si no, batería, altura, GPS... son valores por defecto y la PC debe mostrarlos como "sin dato". */
-    val dron: Boolean = true
+    val dron: Boolean = true,
+    /** Paso de preparación de la misión en el teléfono (ver TelemetryStream.etapa); null = no se envía. */
+    val etapa: String? = null
 )
 
 /** Datos de la misión que se mandan al preparar la salida y mientras dura: quién es, qué número de salida y con qué parámetros. */
@@ -63,6 +71,7 @@ object TelemetryPacket {
         put("alt_m", round(s.altM, 1))
         put("vel_ms", round(s.velMs, 2))
         s.rumbo?.let { put("rumbo", round(it, 0)) }
+        s.curso?.let { put("curso", round(it, 0)) }
         put("bat", s.bat)
         put("sat", s.sat)
         put("enlace", s.enlace)
@@ -74,7 +83,10 @@ object TelemetryPacket {
         put("dist_m", round(s.distM, 1))
         put("grabando", s.grabando)
         put("fotos", s.fotos)
+        put("t_rec_s", s.tRecS)
+        put("cuadros", s.cuadros)
         put("t_vuelo_s", s.tVueloS)
+        s.etapa?.let { put("etapa", it) }
     }.toString()
 
     /** La misión y su ruta, como lista plana `[lat1, lon1, lat2, lon2, …]`. Se repite cada pocos segundos porque UDP puede perder paquetes. */

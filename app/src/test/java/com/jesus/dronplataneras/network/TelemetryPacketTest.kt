@@ -42,6 +42,22 @@ class TelemetryPacketTest {
         assertFalse(JSONObject(TelemetryPacket.telemetry(sample().copy(dron = false))).getBoolean("dron"))
     }
 
+    @Test fun elCursoSoloVaSiElDronSeMueve() {
+        assertFalse(JSONObject(TelemetryPacket.telemetry(sample())).has("curso"))
+        assertEquals(132, JSONObject(TelemetryPacket.telemetry(sample().copy(curso = 131.6))).getInt("curso"))
+    }
+
+    @Test fun llevaLosSegundosDeGrabacionYLosCuadros() {
+        val o = JSONObject(TelemetryPacket.telemetry(sample().copy(tRecS = 125, cuadros = 42)))
+        assertEquals(125, o.getInt("t_rec_s"))
+        assertEquals(42, o.getInt("cuadros"))
+    }
+
+    @Test fun laEtapaSoloVaMientrasSePreparaLaMision() {
+        assertFalse(JSONObject(TelemetryPacket.telemetry(sample())).has("etapa"))
+        assertEquals("planificacion", JSONObject(TelemetryPacket.telemetry(sample().copy(etapa = "planificacion"))).getString("etapa"))
+    }
+
     @Test fun elPaqueteCabeEnUnDatagramaNormal() {
         assertTrue(TelemetryPacket.telemetry(sample()).toByteArray().size < 400)
     }
