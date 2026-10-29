@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.core.content.ContextCompat
@@ -24,6 +25,8 @@ import androidx.core.view.WindowInsetsControllerCompat
 import android.view.WindowManager
 import com.jesus.dronplataneras.data.AgroRepository
 import com.jesus.dronplataneras.flight.LandingGuard
+import com.jesus.dronplataneras.network.CameraFeed
+import com.jesus.dronplataneras.network.LinkLog
 import com.jesus.dronplataneras.network.TelemetryStream
 import com.jesus.dronplataneras.sdk.AppStatus
 import com.jesus.dronplataneras.sdk.DJIConnectionManager
@@ -94,6 +97,16 @@ class MainActivity : AppCompatActivity() {
                     // Pila de navegación simple: el último elemento es la pantalla visible
                     val stack = remember { mutableStateListOf<Route>(Route.Home) }
                     val screen = stack.last()
+                    // La PC muestra "Generando la ruta…" mientras el operador prepara la misión (la ruta le llega al iniciar la salida).
+                    // La vista de cámara no cuenta: ahí también se vuela a mano.
+                    SideEffect {
+                        TelemetryStream.etapa = when (screen) {
+                            Route.PolygonEditor -> "perimetro"
+                            is Route.Planning -> "planificacion"
+                            is Route.Verification -> "verificacion"
+                            else -> null
+                        }
+                    }
                     fun go(r: Route) { stack.add(r) }
                     fun back() { if (stack.size > 1) stack.removeAt(stack.lastIndex) }
                     fun home() { stack.clear(); stack.add(Route.Home) }
@@ -184,7 +197,10 @@ class MainActivity : AppCompatActivity() {
         }
         registerApp()
         // Envío de telemetría a la PC: queda esperando a que el Wi-Fi de la PC esté conectado; un fallo aquí no debe afectar al dron
+        LinkLog.init(applicationContext)
+        LinkLog.log("app", "App abierta")
         runCatching { TelemetryStream.start(this) }.onFailure { Log.e("MyApp", "TelemetryStream falló", it) }
+        runCatching { CameraFeed.start() }.onFailure { Log.e("MyApp", "CameraFeed falló", it) }
         // Después del registro DJI y protegido: un fallo de mapas nunca debe impedir la conexión al dron
         runCatching { MapConfig.init(this) }.onFailure { Log.e("MyApp", "MapConfig.init falló", it) }
     }

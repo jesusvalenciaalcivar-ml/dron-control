@@ -9,6 +9,7 @@ import dji.sdk.keyvalue.key.BatteryKey
 import dji.sdk.keyvalue.key.FlightControllerKey
 import dji.sdk.keyvalue.key.KeyTools
 import dji.v5.manager.KeyManager
+import kotlin.math.atan2
 import kotlin.math.sqrt
 
 /**
@@ -53,7 +54,9 @@ object TelemetryManager {
             KeyTools.createKey(FlightControllerKey.KeyAircraftVelocity), this
         ) { _, newValue ->
             val speed = newValue?.let { sqrt(it.x * it.x + it.y * it.y + it.z * it.z) } ?: 0.0
-            mutate { copy(speed = speed) }
+            // x = norte, y = este (como en MissionExecutor). Por debajo de 0,3 m/s la dirección es ruido del GPS
+            val course = newValue?.takeIf { sqrt(it.x * it.x + it.y * it.y) >= 0.3 }?.let { Math.toDegrees(atan2(it.y, it.x)) } ?: Double.NaN
+            mutate { copy(speed = speed, course = course) }
         }
 
         KeyManager.getInstance().listen(

@@ -9,6 +9,19 @@ import org.junit.Test
 
 class PcLinkTest {
 
+    @Test
+    fun reconexionEnMisionSiempreYFueraSoloUnRato() {
+        // En misión: cada 10 s, aunque haga mucho que se perdió
+        assertTrue(PcLink.shouldReconnect(now = 100_000, lostAt = 1_000, lastAttemptAt = 89_000, inMission = true))
+        assertFalse(PcLink.shouldReconnect(now = 100_000, lostAt = 1_000, lastAttemptAt = 95_000, inMission = true))
+        // Fuera de misión: cada 30 s y solo los primeros 5 min
+        assertTrue(PcLink.shouldReconnect(now = 60_000, lostAt = 10_000, lastAttemptAt = 20_000, inMission = false))
+        assertFalse(PcLink.shouldReconnect(now = 60_000, lostAt = 10_000, lastAttemptAt = 40_000, inMission = false))
+        assertFalse(PcLink.shouldReconnect(now = 400_000, lostAt = 10_000, lastAttemptAt = 0, inMission = false))
+        // Nunca hubo conexión: no se insiste fuera de misión
+        assertFalse(PcLink.shouldReconnect(now = 60_000, lostAt = 0, lastAttemptAt = 0, inMission = false))
+    }
+
     private fun ip(s: String) = PcLink.parseIPv4(s)!!
 
     @Test fun parseaIpValida() {

@@ -37,7 +37,7 @@ object FlightLogSync {
 
     /** Al cerrar una salida: si hay PC, envía lo pendiente en segundo plano. Nunca bloquea ni afecta al vuelo; si falla, queda pendiente. */
     fun sendInBackground(repo: AgroRepository) {
-        if (PcLink.state.value != PcLink.State.CONNECTED) return
+        if (PcLink.state.value != PcLink.State.CONNECTED) return LinkLog.log("registros", "Salida cerrada sin conexión con la PC: su registro queda pendiente")
         scope.launch {
             sendPending(repo)
                 .onSuccess { if (it.enviadas > 0) AppStatus.message.value = "Registro de vuelo enviado a la PC" }
@@ -60,9 +60,29 @@ object FlightLogSync {
                 val eventos = File(csv.parentFile, csv.nameWithoutExtension + ".events.jsonl")
                 post(s, body(s, csv.readText(), if (eventos.exists()) eventos.readText() else ""))
                 enviadas++
+                LinkLog.log("registros", "Salida ${s.indice + 1} de \"${s.mision}\" enviada a la PC")
             }
+            sendLinkLogs()
             Resultado(enviadas, sinArchivo)
         }
+    }.onFailure { LinkLog.log("registros", "No se pudieron enviar los registros de vuelo: ${it.message}") }
+
+    /** Manda a la PC los registros del enlace de los últimos días (ver [LinkLog]). Si falla no importa: van en el próximo envío. */
+    private fun sendLinkLogs() {
+        for (f in LinkLog.recentFiles()) runCatching {
+            val bytes = f.readBytes()
+            val c = connection("/logs/${f.name}")
+            try {
+                c.requestMethod = "POST"
+                c.doOutput = true
+                c.setRequestProperty("Content-Type", "text/plain; charset=utf-8")
+                c.setFixedLengthStreamingMode(bytes.size)
+                c.outputStream.use { it.write(bytes) }
+                check(c.responseCode == 200) { "la PC respondió ${c.responseCode}" }
+            } finally {
+                c.disconnect()
+            }
+        }.onFailure { Log.w(TAG, "No se pudo mandar ${f.name}: ${it.message}") }
     }
 
     /** Las salidas que la PC todavía no tiene. */
@@ -92,13 +112,14 @@ object FlightLogSync {
         put("eventos_jsonl", eventosJsonl)
     }.toString()
 
-    private fun connection(path: String): HttpURLConnection {
+    /** Conexión HTTP a la PC (también la usa [CameraFeed], que va al mismo puerto). */
+    internal fun connection(path: String, timeoutMs: Int = 30_000): HttpURLConnection {
         val host = PcLink.pcHost ?: error("Conéctate primero a la PC")
         val url = URL("http", host, PORT, path)
         // Por el Wi-Fi de la PC, que no es la red por defecto del teléfono (no tiene internet)
         val c = (PcLink.network?.openConnection(url) ?: url.openConnection()) as HttpURLConnection
-        c.connectTimeout = 5_000
-        c.readTimeout = 30_000
+        c.connectTimeout = minOf(5_000, timeoutMs)
+        c.readTimeout = timeoutMs
         return c
     }
 

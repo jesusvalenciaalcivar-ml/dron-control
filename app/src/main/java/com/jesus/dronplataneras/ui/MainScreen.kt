@@ -33,16 +33,23 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jesus.dronplataneras.R
+import com.jesus.dronplataneras.camera.CameraControl
+import com.jesus.dronplataneras.camera.GimbalLook
 import com.jesus.dronplataneras.flight.FlightActions
 import com.jesus.dronplataneras.sdk.AppStatus
 import com.jesus.dronplataneras.sdk.DJIConnectionManager
+import com.jesus.dronplataneras.sdk.runOnMain
 import com.jesus.dronplataneras.survey.PolygonGeometry
 import com.jesus.dronplataneras.map.AgroMap
 import com.jesus.dronplataneras.map.MapLayers
 import com.jesus.dronplataneras.survey.SurveySession
 import com.jesus.dronplataneras.survey.toLatLon
 import com.jesus.dronplataneras.survey.LatLon as GeoLatLon
+import com.jesus.dronplataneras.telemetry.DroneInfo
 import com.jesus.dronplataneras.telemetry.TelemetryManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlin.math.min
 
@@ -51,6 +58,14 @@ private val HudBarBackground = Color(0xE6FFFFFF)
 private val MarkGreen = Color(0xFF00704A)
 private val CloseBlue = Color(0xFF1565C0)
 
+
+/** Baja la cámara al marcar un vértice y la devuelve a su ángulo (ver [GimbalLook]). Una sola para toda la app: la cámara también es una sola. */
+private val gimbalLook = GimbalLook(
+    scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+    pitch = { DroneInfo.gimbalPitch.value },
+    rotate = { degrees -> CameraControl.rotateGimbal(degrees) { runOnMain { AppStatus.message.value = "No se pudo mover la cámara: $it" } } },
+    atNadir = ::isNadir
+)
 
 /**
  * Vista de cámara a pantalla completa. Comparte los vértices con el editor de perímetro
@@ -65,6 +80,8 @@ fun MainScreen(onBack: () -> Unit, onOpenEditor: () -> Unit) {
     // Los vértices viven en SurveySession: sobreviven a salir/volver de la pantalla
     val vertices = SurveySession.vertices
     val areaHa = PolygonGeometry.areaSquareMeters(vertices) / 10_000
+
+    val gimbalPitch by DroneInfo.gimbalPitch
 
     fun report(result: SurveySession.Result) {
         AppStatus.message.value = when (result) {
@@ -98,6 +115,9 @@ fun MainScreen(onBack: () -> Unit, onOpenEditor: () -> Unit) {
         val mapHeight = (mapWidth.value * 0.5625f).dp
 
         CameraPreview(modifier = Modifier.fillMaxSize())
+
+        // Mira del punto que se marca (el punto bajo el dron): siempre en vuelo; se corre en la imagen si se inclina la cámara (ver VertexReticle)
+        if (isConnected && isFlying) VertexReticle(gimbalPitch, maxWidth, maxHeight)
 
         // Fila superior: datos | notificación (centro) | volver
         Row(
@@ -218,7 +238,15 @@ fun MainScreen(onBack: () -> Unit, onOpenEditor: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             MissionButton(Icons.Filled.Place, "MARCAR VÉRTICE ${vertices.size + 1}", MarkGreen, Color.White, 56.dp) {
-                report(SurveySession.capture(telemetry, isConnected))
+                val result = SurveySession.capture(telemetry, isConnected)
+                report(result)
+                // El vértice es la posición del dron, no lo que se ve: si la cámara estaba inclinada baja sola para mostrar el punto marcado
+                // y vuelve al ángulo anterior en cuanto llega (se cancela si el operador la mueve). No baja al entrar a la pantalla ni con
+                // un rechazo: al volar a mano se mira al frente.
+                if (result is SurveySession.Result.Ok) {
+                    gimbalLook.lookDownThenRestore { runOnMain { AppStatus.message.value = "Cámara de vuelta al ángulo anterior" } }
+                        ?.let { AppStatus.message.value += " · La cámara baja un instante para mostrar el punto marcado" }
+                }
             }
             MissionButton(Icons.AutoMirrored.Filled.Undo, null, Color(0xE6FFFFFF), Color.DarkGray, 36.dp) {
                 SurveySession.undo()

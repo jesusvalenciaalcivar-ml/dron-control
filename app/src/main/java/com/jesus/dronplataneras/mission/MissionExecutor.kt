@@ -18,7 +18,6 @@ import com.jesus.dronplataneras.telemetry.DroneInfo
 import com.jesus.dronplataneras.telemetry.TelemetryManager
 import dji.sdk.keyvalue.key.CameraKey
 import dji.sdk.keyvalue.key.FlightControllerKey
-import dji.sdk.keyvalue.key.GimbalKey
 import dji.sdk.keyvalue.key.KeyTools
 import dji.sdk.keyvalue.value.camera.CameraMode
 import dji.sdk.keyvalue.value.common.ComponentIndexType
@@ -28,8 +27,6 @@ import dji.sdk.keyvalue.value.flightcontroller.RollPitchControlMode
 import dji.sdk.keyvalue.value.flightcontroller.VerticalControlMode
 import dji.sdk.keyvalue.value.flightcontroller.VirtualStickFlightControlParam
 import dji.sdk.keyvalue.value.flightcontroller.YawControlMode
-import dji.sdk.keyvalue.value.gimbal.GimbalAngleRotation
-import dji.sdk.keyvalue.value.gimbal.GimbalAngleRotationMode
 import dji.v5.common.callback.CommonCallbacks
 import dji.v5.common.error.IDJIError
 import dji.v5.et.action
@@ -712,13 +709,7 @@ object MissionExecutor {
         return current.isEmpty() || current == CameraMode.UNKNOWN.name
     }
 
-    private fun rotateGimbal(pitchDeg: Double) {
-        GimbalKey.KeyRotateByAngle.create(ComponentIndexType.LEFT_OR_MAIN).action(
-            GimbalAngleRotation(GimbalAngleRotationMode.ABSOLUTE_ANGLE, pitchDeg, 0.0, 0.0, false, true, true, 1.0, false, 0),
-            onSuccess = {},
-            onFailure = { e -> Log.w(TAG, "Gimbal: ${e.readable()}") }
-        )
-    }
+    private fun rotateGimbal(pitchDeg: Double) = CameraControl.rotateGimbal(pitchDeg)
 
     /** Espera a que el gimbal llegue a [pitchDeg]; reintenta la orden a mitad de la espera. */
     private suspend fun awaitGimbal(pitchDeg: Double): Boolean {
