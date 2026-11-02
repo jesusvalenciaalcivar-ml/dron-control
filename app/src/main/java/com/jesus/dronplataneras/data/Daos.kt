@@ -50,6 +50,10 @@ abstract class LoteDao {
     @Query("SELECT * FROM lotes WHERE id = :id")
     abstract suspend fun getLote(id: Long): LoteConVertices?
 
+    @Transaction
+    @Query("SELECT * FROM lotes")
+    abstract suspend fun todos(): List<LoteConVertices>
+
     private fun List<GeoCoord>.toVertices(loteId: Long) = mapIndexed { i, p ->
         VerticeEntity(loteId = loteId, ordenSecuencia = i, latitud = p.latitude, longitud = p.longitude)
     }
@@ -123,6 +127,10 @@ abstract class MisionDao {
 
     @Query("SELECT * FROM misiones WHERE loteId = :loteId ORDER BY fechaActualizacion DESC LIMIT 1")
     abstract suspend fun ultimaMisionDeLote(loteId: Long): MisionEntity?
+
+    @Transaction
+    @Query("SELECT * FROM misiones")
+    abstract suspend fun todas(): List<MisionCompleta>
 }
 
 /**
@@ -148,6 +156,10 @@ abstract class VueloDao {
 
     @Query("SELECT * FROM salidas WHERE id = :id")
     abstract suspend fun getSalida(id: Long): SalidaEntity?
+
+    @Transaction
+    @Query("SELECT * FROM vuelos")
+    abstract suspend fun todos(): List<VueloCompleto>
 
     @Transaction
     @Query("SELECT * FROM vuelos WHERE misionId = :misionId ORDER BY fechaInicio DESC")
