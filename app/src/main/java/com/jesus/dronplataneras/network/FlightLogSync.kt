@@ -24,6 +24,7 @@ import java.net.URL
  *   mitad, otra PC o una PC con la carpeta borrada se resuelven solos al volver a enviar.
  * - Automático al cerrar cada salida si el teléfono está conectado a la PC ([sendInBackground]), y con el botón "Enviar vuelos
  *   pendientes" para lo que se voló sin la PC cerca ([sendPending]).
+ * - Cada envío lleva también el historial completo para la base de datos de la PC ([HistorySync]).
  */
 object FlightLogSync {
 
@@ -33,7 +34,8 @@ object FlightLogSync {
     private val mutex = Mutex()   // el envío automático y el botón nunca van a la vez
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    data class Resultado(val enviadas: Int, val sinArchivo: Int)
+    /** [historialError]: por qué la PC no guardó el historial en su base ([HistorySync]); null si lo guardó. */
+    data class Resultado(val enviadas: Int, val sinArchivo: Int, val historialError: String? = null)
 
     /** Al cerrar una salida: si hay PC, envía lo pendiente en segundo plano. Nunca bloquea ni afecta al vuelo; si falla, queda pendiente. */
     fun sendInBackground(repo: AgroRepository) {
@@ -62,8 +64,10 @@ object FlightLogSync {
                 enviadas++
                 LinkLog.log("registros", "Salida ${s.indice + 1} de \"${s.mision}\" enviada a la PC")
             }
+            // Después de los registros, que ya quedaron guardados aunque el historial falle
+            val historial = HistorySync.send(repo).exceptionOrNull()?.message
             sendLinkLogs()
-            Resultado(enviadas, sinArchivo)
+            Resultado(enviadas, sinArchivo, historial)
         }
     }.onFailure { LinkLog.log("registros", "No se pudieron enviar los registros de vuelo: ${it.message}") }
 

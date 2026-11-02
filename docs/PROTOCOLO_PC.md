@@ -195,6 +195,40 @@ en Procesamiento). Ahí mismo el importador de la microSD copia los videos de es
 además: lo que llega solo se guarda como texto (nunca se ejecuta), los UUID se validan antes de usarlos en nombres de carpeta, cada
 salida se escribe **una sola vez** (un envío falso no pisa uno real) y el cuerpo tiene un máximo de 64 MB.
 
+## Historial para la base de datos de la PC (HTTP, puerto 8766, ruta `/sync`)
+Los **lotes** (con su perímetro), las **misiones** (con sus parámetros y ruta), los **vuelos** y las **salidas** pasan a la base de datos
+de la PC (PostgreSQL), para su pantalla de Inicio y lo que venga después (`network/HistorySync`).
+
+**Cuándo:** en cada envío de los registros de vuelo (al cerrar cada salida y con "Enviar vuelos pendientes"), después de las salidas.
+Va **todo el historial cada vez**, no solo lo nuevo: son pocos KB, no se marca nada en el teléfono y la PC nunca queda a medias. La PC
+guarda cada fila por su UUID, así que repetir no duplica nada.
+
+`POST /sync`:
+```json
+{"v":1,
+ "lotes":[{"uuid":"…","nombre":"Finca Sánchez","area_ha":1.5,"creado_ms":1793195800000,"vertices":[[-0.299,-79.488],[-0.299,-79.487],…]}],
+ "misiones":[{"uuid":"…","lote":"<uuid del lote>","nombre":"Sector 1","estado":"COMPLETADO","duracion_min":12.5,"fotos":80,
+              "ruta":"<WaypointPlan en JSON, como texto>","creado_ms":…,"actualizado_ms":…,
+              "parametros":{"altura_m":25,"traslape_lateral_pct":70,"traslape_frontal_pct":75,"margen_interno_m":3,"altura_copa_m":4,"modo":"video"}}],
+ "vuelos":[{"uuid":"…","mision":"<uuid de la misión>","estado":"COMPLETADO","inicio_ms":…,"fin_ms":…,"modo":"video",
+            "perimetro":"[[lat,lon],…] como texto","ruta":"<WaypointPlan volado, como texto>","total_wp":6,"siguiente_wp":6,
+            "salidas":[{"uuid":"…","indice":0,"desde_wp":0,"hasta_wp":5,"estado":"COMPLETADA","motivo":null,"inicio_ms":…,"fin_ms":…,
+                        "bateria_inicio":98,"bateria_fin":41,"video_inicio_ms":…,"video_fin_ms":…,"distancia_m":812.5}]}]}
+```
+- Los hijos apuntan al padre por **UUID** (los id de Room no salen del teléfono). `vertices` va en el orden del perímetro, como `[lat, lon]`.
+- Lo que no se sabe va como `null`. Estados: los nombres de los enums (`EstadoMision`, `EstadoVuelo`, `EstadoSalida`); `modo`: `video` o `foto`.
+
+Respuestas: `200 {"ok":true,"lotes":1,"misiones":1,"vuelos":1,"salidas":1}`; `409` si nadie inició sesión en la PC (todo queda a nombre
+de quien tiene la sesión: el teléfono no tiene cuentas); `400` si algo no es válido; `500` si la base de la PC falló. En todos los
+errores la PC no guarda **nada** (una sola transacción) y el siguiente envío trae todo otra vez. El teléfono lo anota en su registro del
+enlace y lo muestra al pulsar "Enviar vuelos pendientes".
+
+**Lo que no hace:** lo borrado en el teléfono no se borra en la PC, y lo que se edite en la PC no vuelve al teléfono.
+
+**Seguridad:** las mismas capas que los registros de vuelo (Red Local, Firewall estrecho, solo `192.168.137.x`, 64 MB como máximo, nada
+se ejecuta). A diferencia de las salidas, el historial **sí se actualiza** (el teléfono edita lotes y misiones): quien esté en la Red
+Local podría cambiar nombres o estados, no borrar nada. La zona móvil tiene contraseña.
+
 ## Vista previa de la cámara (HTTP, puerto 8766, ruta `/camara`)
 Para ver en la PC lo que mira la cámara mientras se vuela, como la ventana pequeña del teléfono. **Solo para mirar**: el video
 bueno sigue grabándose en la microSD.

@@ -10,7 +10,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Visibility
@@ -129,19 +128,15 @@ fun LocalNetworkScreen(onBack: () -> Unit) {
                             AppStatus.message.value = r.fold(
                                 { res ->
                                     val sinArchivo = if (res.sinArchivo > 0) " (${res.sinArchivo} sin registro en el teléfono)" else ""
-                                    if (res.enviadas > 0) "Enviadas a la PC: ${res.enviadas} salida(s)$sinArchivo"
-                                    else "La PC ya tiene todos los vuelos$sinArchivo"
+                                    val historial = res.historialError?.let { ". El historial no se guardó en la base de la PC: $it" } ?: ""
+                                    (if (res.enviadas > 0) "Enviadas a la PC: ${res.enviadas} salida(s)$sinArchivo"
+                                    else "La PC ya tiene todos los vuelos$sinArchivo") + historial
                                 },
                                 { "No se pudo enviar: ${it.message}" }
                             )
                             enviando = false
                         }
                     }
-                    // ponytail: sin servidor en la PC (no hay puerto ni protocolo) el botón no envía nada todavía
-                    SecondaryButton(
-                        "Enviar Polígono a PC", Icons.Filled.FileUpload, Modifier.fillMaxWidth(),
-                        enabled = link == PcLink.State.CONNECTED
-                    ) {}
                     }
                     NetworkTab.GALLERY -> GallerySection(Modifier.fillMaxSize())
                 }

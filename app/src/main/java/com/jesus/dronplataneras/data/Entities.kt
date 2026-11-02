@@ -224,6 +224,9 @@ data class SalidaParaEnviar(
     val lote: String
 )
 
+/** Todo el historial del teléfono, tal como se envía a la PC para su base de datos (ver network/HistorySync.kt). */
+data class Historial(val lotes: List<LoteConVertices>, val misiones: List<MisionCompleta>, val vuelos: List<VueloCompleto>)
+
 /**
  * Un vuelo con todas sus salidas.
  */
